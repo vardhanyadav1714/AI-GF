@@ -1,0 +1,4 @@
+<resources>
+    <string name="app_name">Eva</string>
+    <string name="backend_base_url">https://api.merigf.com/api/v1</string>
+</resources>
