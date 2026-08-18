@@ -257,7 +257,9 @@ private data class ChatMessage(
     val createdAtMillis: Long = System.currentTimeMillis(),
     val kind: MessageKind = MessageKind.Text,
     val streaming: Boolean = false,
-    val voiceSeconds: Int = 0
+    val voiceSeconds: Int = 0,
+    val audioBase64: String = "",
+    val audioMimeType: String = ""
 )
 
 private data class ConversationPreview(
@@ -531,6 +533,7 @@ private class EvaAppController(context: Context) {
     suspend fun sendVoiceNote(
         audioBytes: ByteArray,
         mimeType: String = "audio/mp4",
+        voiceSeconds: Int = max(1, audioBytes.size / 8000),
         stayInCall: Boolean = false
     ): VoiceSendResult? {
         if (audioBytes.isEmpty()) {
@@ -551,7 +554,9 @@ private class EvaAppController(context: Context) {
                 text = "Voice note",
                 fromUser = true,
                 kind = MessageKind.Voice,
-                voiceSeconds = max(1, audioBytes.size / 8000)
+                voiceSeconds = voiceSeconds,
+                audioBase64 = Base64.encodeToString(audioBytes, Base64.NO_WRAP),
+                audioMimeType = mimeType
             )
         )
         messages.add(
@@ -582,17 +587,31 @@ private class EvaAppController(context: Context) {
             if (userIndex in messages.indices) {
                 messages[userIndex] = messages[userIndex].copy(
                     text = result.transcript.ifBlank { "Voice note" },
-                    kind = MessageKind.Text,
-                    voiceSeconds = 0
+                    kind = MessageKind.Voice,
+                    voiceSeconds = voiceSeconds,
+                    audioBase64 = Base64.encodeToString(audioBytes, Base64.NO_WRAP),
+                    audioMimeType = mimeType
                 )
             }
             if (placeholderIndex in messages.indices) {
-                messages[placeholderIndex] = messages[placeholderIndex].copy(
-                    text = result.assistantText.ifBlank {
-                        "I heard you. Tell me a little more?"
-                    },
-                    streaming = false
-                )
+                val assistantText = result.assistantText.ifBlank {
+                    "I heard you. Tell me a little more?"
+                }
+                messages[placeholderIndex] = if (result.audioBase64.isNotBlank()) {
+                    messages[placeholderIndex].copy(
+                        text = assistantText,
+                        kind = MessageKind.Voice,
+                        voiceSeconds = estimateSpeechSeconds(assistantText),
+                        audioBase64 = result.audioBase64,
+                        audioMimeType = result.audioMimeType,
+                        streaming = false
+                    )
+                } else {
+                    messages[placeholderIndex].copy(
+                        text = assistantText,
+                        streaming = false
+                    )
+                }
             }
             playback = result
         }.onFailure { error ->
@@ -1857,7 +1876,6 @@ private fun ChatScreen(controller: EvaAppController, scope: CoroutineScope) {
                 recordingStartedAt = System.currentTimeMillis()
                 recordingSeconds = 0
                 recording = true
-                controller.notice = "Recording..."
             }.onFailure { error ->
                 controller.notice = error.cleanMessage("Could not start recording.")
             }
@@ -1878,7 +1896,6 @@ private fun ChatScreen(controller: EvaAppController, scope: CoroutineScope) {
                     recordingStartedAt = System.currentTimeMillis()
                     recordingSeconds = 0
                     recording = true
-                    controller.notice = "Recording..."
                 }.onFailure { error ->
                     controller.notice = error.cleanMessage("Could not start recording.")
                 }
@@ -1919,7 +1936,8 @@ private fun ChatScreen(controller: EvaAppController, scope: CoroutineScope) {
             scope.launch {
                 controller.sendVoiceNote(
                     audioBytes = preview.audioBytes,
-                    mimeType = preview.mimeType
+                    mimeType = preview.mimeType,
+                    voiceSeconds = preview.durationSeconds
                 )?.let { result ->
                     voicePreview = null
                     playBase64Audio(context, result.audioBase64, result.audioMimeType)
@@ -1958,7 +1976,18 @@ private fun ChatScreen(controller: EvaAppController, scope: CoroutineScope) {
                     }
                 }
                 items(controller.messages, key = { it.id }) { message ->
-                    MessageBubble(message)
+                    MessageBubble(
+                        message = message,
+                        onPlayAudio = { audioMessage ->
+                            if (audioMessage.audioBase64.isNotBlank()) {
+                                playBase64Audio(
+                                    context = context,
+                                    base64Audio = audioMessage.audioBase64,
+                                    mimeType = audioMessage.audioMimeType.ifBlank { "audio/mp4" }
+                                )
+                            }
+                        }
+                    )
                 }
             }
             ChatComposer(
@@ -2041,7 +2070,10 @@ private fun ChatHeader(
 }
 
 @Composable
-private fun MessageBubble(message: ChatMessage) {
+private fun MessageBubble(
+    message: ChatMessage,
+    onPlayAudio: (ChatMessage) -> Unit = {}
+) {
     val fromUser = message.fromUser
     val bubbleTextColor = if (fromUser) Color.White else evaText()
     val quietBubbleColor = if (isEvaLight()) {
@@ -2103,7 +2135,9 @@ private fun MessageBubble(message: ChatMessage) {
                 when (message.kind) {
                     MessageKind.Voice -> VoiceNoteBubble(
                         seconds = message.voiceSeconds,
-                        fromUser = fromUser
+                        fromUser = fromUser,
+                        canPlay = message.audioBase64.isNotBlank(),
+                        onPlay = { onPlayAudio(message) }
                     )
 
                     MessageKind.Attachment -> Row(verticalAlignment = Alignment.CenterVertically) {
@@ -2141,11 +2175,17 @@ private fun MessageBubble(message: ChatMessage) {
 }
 
 @Composable
-private fun VoiceNoteBubble(seconds: Int, fromUser: Boolean) {
+private fun VoiceNoteBubble(
+    seconds: Int,
+    fromUser: Boolean,
+    canPlay: Boolean,
+    onPlay: () -> Unit
+) {
     val iconColor = if (fromUser) Color.White else EvaColors.Pink
     val textColor = if (fromUser) Color.White else evaText()
+    val label = if (fromUser) "Your voice" else "Eva voice"
     Row(
-        modifier = Modifier.width(178.dp),
+        modifier = Modifier.width(186.dp),
         verticalAlignment = Alignment.CenterVertically
     ) {
         Box(
@@ -2155,14 +2195,15 @@ private fun VoiceNoteBubble(seconds: Int, fromUser: Boolean) {
                 .background(
                     if (fromUser) Color.White.copy(alpha = 0.22f)
                     else EvaColors.Pink.copy(alpha = 0.12f)
-                ),
+                )
+                .clickable(enabled = canPlay, onClick = onPlay),
             contentAlignment = Alignment.Center
         ) {
             Icon(Icons.Rounded.PlayArrow, contentDescription = null, tint = iconColor)
         }
         Spacer(Modifier.width(11.dp))
         Column(Modifier.weight(1f)) {
-            Text("Voice note", color = textColor, fontSize = 13.sp, fontWeight = FontWeight.Black)
+            Text(label, color = textColor, fontSize = 13.sp, fontWeight = FontWeight.Black)
             Spacer(Modifier.height(2.dp))
             Text(
                 formatDuration(seconds),
@@ -2789,6 +2830,7 @@ private fun CallScreen(
     val recorder = remember(context) { EvaAudioRecorder(context) }
     var seconds by remember { mutableIntStateOf(0) }
     var recording by remember { mutableStateOf(false) }
+    var recordingStartedAt by remember { mutableStateOf(0L) }
     var speaker by remember { mutableStateOf(true) }
     val permissionLauncher = rememberLauncherForActivityResult(
         ActivityResultContracts.RequestPermission()
@@ -2796,8 +2838,8 @@ private fun CallScreen(
         if (granted) {
             runCatching {
                 recorder.start()
+                recordingStartedAt = System.currentTimeMillis()
                 recording = true
-                controller.notice = "Recording..."
             }.onFailure { error ->
                 controller.notice = error.cleanMessage("Could not start recording.")
             }
@@ -2814,8 +2856,8 @@ private fun CallScreen(
             ) == PackageManager.PERMISSION_GRANTED -> {
                 runCatching {
                     recorder.start()
+                    recordingStartedAt = System.currentTimeMillis()
                     recording = true
-                    controller.notice = "Recording..."
                 }.onFailure { error ->
                     controller.notice = error.cleanMessage("Could not start recording.")
                 }
@@ -2833,7 +2875,11 @@ private fun CallScreen(
         recording = false
         if (audioBytes != null) {
             scope.launch {
-                controller.sendVoiceNote(audioBytes, stayInCall = true)?.let { result ->
+                controller.sendVoiceNote(
+                    audioBytes = audioBytes,
+                    voiceSeconds = max(1, ((System.currentTimeMillis() - recordingStartedAt) / 1000L).toInt()),
+                    stayInCall = true
+                )?.let { result ->
                     playBase64Audio(context, result.audioBase64, result.audioMimeType)
                 }
             }
@@ -3421,6 +3467,11 @@ private fun formatDuration(seconds: Int): String {
     val minutes = seconds / 60
     val remaining = seconds % 60
     return "$minutes:${remaining.toString().padStart(2, '0')}"
+}
+
+private fun estimateSpeechSeconds(text: String): Int {
+    val words = text.trim().split(Regex("\\s+")).count { it.isNotBlank() }
+    return max(2, (words / 2) + 1).coerceAtMost(45)
 }
 
 private fun localEvaReply(message: String): String {
