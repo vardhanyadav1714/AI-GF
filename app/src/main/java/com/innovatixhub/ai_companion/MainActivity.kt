@@ -1,15 +1,22 @@
 package com.innovatixhub.ai_companion
 
+import android.Manifest
 import android.app.Activity
 import android.content.Context
 import android.content.Intent
+import android.content.pm.PackageManager
+import android.media.MediaPlayer
+import android.media.MediaRecorder
 import android.net.Uri
 import android.os.Build
 import android.os.Bundle
 import android.text.format.DateFormat
+import android.util.Base64
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.animation.AnimatedContent
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.foundation.BorderStroke
@@ -126,6 +133,7 @@ import androidx.compose.ui.graphics.toArgb
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalFocusManager
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalView
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.text.font.FontWeight
@@ -137,6 +145,7 @@ import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.lifecycle.lifecycleScope
+import androidx.core.content.ContextCompat
 import androidx.core.view.WindowInsetsControllerCompat
 import com.innovatixhub.ai_companion.ui.theme.AICompanionTheme
 import kotlinx.coroutines.Dispatchers
@@ -149,6 +158,7 @@ import org.json.JSONObject
 import java.net.HttpURLConnection
 import java.net.URI
 import java.net.URLEncoder
+import java.io.File
 import java.util.Date
 import java.util.Locale
 import java.util.UUID
@@ -270,6 +280,14 @@ private data class AuthSession(
 private data class SendMessageResult(
     val conversationId: String,
     val assistantText: String
+)
+
+private data class VoiceSendResult(
+    val conversationId: String,
+    val transcript: String,
+    val assistantText: String,
+    val audioBase64: String,
+    val audioMimeType: String
 )
 
 private class EvaAppController(context: Context) {
@@ -486,22 +504,80 @@ private class EvaAppController(context: Context) {
         )
     }
 
-    fun sendVoiceNote() {
+    suspend fun sendVoiceNote(
+        audioBytes: ByteArray,
+        mimeType: String = "audio/mp4",
+        stayInCall: Boolean = false
+    ): VoiceSendResult? {
+        if (audioBytes.isEmpty()) {
+            notice = "I could not hear anything. Try again."
+            return null
+        }
+        if (sending) {
+            notice = "Wait for Eva to finish replying first."
+            return null
+        }
+
         activeTab = EvaTab.Chat
+        premiumOpen = false
+        if (!stayInCall) callOpen = false
+        sending = true
         messages.add(
             ChatMessage(
                 text = "Voice note",
                 fromUser = true,
                 kind = MessageKind.Voice,
-                voiceSeconds = 8
+                voiceSeconds = max(1, audioBytes.size / 8000)
             )
         )
         messages.add(
             ChatMessage(
-                text = "I got your voice note. I love hearing from you like this.",
-                fromUser = false
+                text = "",
+                fromUser = false,
+                streaming = true
             )
         )
+        val userIndex = messages.lastIndex - 1
+        val placeholderIndex = messages.lastIndex
+        val liveResult = if (api.savedAccessToken().isNullOrBlank()) {
+            Result.failure(IllegalStateException("No signed-in backend session."))
+        } else {
+            runCatching {
+                api.sendVoiceMessage(
+                    conversationId = selectedConversationId,
+                    audioBytes = audioBytes,
+                    mimeType = mimeType
+                )
+            }
+        }
+
+        var playback: VoiceSendResult? = null
+        liveResult.onSuccess { result ->
+            backendLive = true
+            selectedConversationId = result.conversationId
+            if (userIndex in messages.indices) {
+                messages[userIndex] = messages[userIndex].copy(
+                    text = result.transcript.ifBlank { "Voice note" },
+                    kind = MessageKind.Text,
+                    voiceSeconds = 0
+                )
+            }
+            if (placeholderIndex in messages.indices) {
+                messages[placeholderIndex] = messages[placeholderIndex].copy(
+                    text = result.assistantText.ifBlank {
+                        "I heard you. Tell me a little more?"
+                    },
+                    streaming = false
+                )
+            }
+            playback = result
+        }.onFailure { error ->
+            backendLive = false
+            notice = error.cleanMessage("Voice message could not be sent.")
+            streamLocalReply("voice", placeholderIndex)
+        }
+        sending = false
+        return playback
     }
 
     fun clearNotice() {
@@ -692,6 +768,40 @@ private class MeriGfApi(context: Context) {
         )
     }
 
+    suspend fun sendVoiceMessage(
+        conversationId: String?,
+        audioBytes: ByteArray,
+        mimeType: String
+    ): VoiceSendResult {
+        val body = JSONObject()
+            .put("conversationId", conversationId.orEmpty())
+            .put("companionId", "eva")
+            .put("audioBase64", Base64.encodeToString(audioBytes, Base64.NO_WRAP))
+            .put("mimeType", mimeType)
+        val data = requestObject(
+            method = "POST",
+            path = "/voice/chat",
+            body = body
+        )
+        val audio = data.optJSONObject("audio")
+        val reply = data.bestString("reply", "assistantReply", "content", default = "")
+            .ifBlank {
+                val messageObject = data.optJSONObject("assistantMessage")
+                    ?: data.optJSONObject("replyMessage")
+                    ?: data.optJSONArray("messages")?.lastObjectWithRole("assistant")
+                messageObject?.bestString("content", "text", default = "").orEmpty()
+            }
+        return VoiceSendResult(
+            conversationId = data.bestString("conversationId", default = conversationId.orEmpty()),
+            transcript = data.bestString("transcript", "text", default = "Voice note"),
+            assistantText = reply,
+            audioBase64 = audio?.bestString("base64", "audioBase64", default = "")
+                ?: data.bestString("audioBase64", default = ""),
+            audioMimeType = audio?.bestString("mimeType", default = "audio/wav")
+                ?: data.bestString("audioMimeType", default = "audio/wav")
+        )
+    }
+
     private suspend fun createConversation(): String {
         val data = requestObject(
             method = "POST",
@@ -750,7 +860,7 @@ private class MeriGfApi(context: Context) {
         val connection = (url.openConnection() as HttpURLConnection).apply {
             requestMethod = method
             connectTimeout = 10_000
-            readTimeout = 30_000
+            readTimeout = 90_000
             setRequestProperty("Accept", "application/json")
             setRequestProperty("Content-Type", "application/json")
             if (authorized) {
@@ -797,6 +907,100 @@ private class MeriGfApi(context: Context) {
 }
 
 private class ApiException(message: String) : Exception(message)
+
+private class EvaAudioRecorder(private val context: Context) {
+    private var recorder: MediaRecorder? = null
+    private var outputFile: File? = null
+
+    fun start() {
+        cancel()
+        val file = File.createTempFile("eva-voice-", ".m4a", context.cacheDir)
+        val nextRecorder = createMediaRecorder(context).apply {
+            setAudioSource(MediaRecorder.AudioSource.MIC)
+            setOutputFormat(MediaRecorder.OutputFormat.MPEG_4)
+            setAudioEncoder(MediaRecorder.AudioEncoder.AAC)
+            setAudioSamplingRate(16_000)
+            setAudioEncodingBitRate(64_000)
+            setOutputFile(file.absolutePath)
+            prepare()
+            start()
+        }
+        outputFile = file
+        recorder = nextRecorder
+    }
+
+    fun stop(): ByteArray {
+        val activeRecorder = recorder ?: throw IllegalStateException("Recording has not started.")
+        val file = outputFile ?: throw IllegalStateException("Recording file is missing.")
+        recorder = null
+        outputFile = null
+        try {
+            activeRecorder.stop()
+        } catch (error: RuntimeException) {
+            file.delete()
+            throw IllegalStateException("Hold the mic a little longer before sending.", error)
+        } finally {
+            activeRecorder.release()
+        }
+        val bytes = file.readBytes()
+        file.delete()
+        return bytes
+    }
+
+    fun cancel() {
+        val activeRecorder = recorder
+        recorder = null
+        runCatching { activeRecorder?.stop() }
+        activeRecorder?.release()
+        outputFile?.delete()
+        outputFile = null
+    }
+}
+
+private fun createMediaRecorder(context: Context): MediaRecorder =
+    if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
+        MediaRecorder(context)
+    } else {
+        legacyMediaRecorder()
+    }
+
+@Suppress("DEPRECATION")
+private fun legacyMediaRecorder(): MediaRecorder = MediaRecorder()
+
+private fun playBase64Audio(context: Context, base64Audio: String, mimeType: String) {
+    if (base64Audio.isBlank()) return
+    runCatching {
+        val bytes = Base64.decode(base64Audio, Base64.DEFAULT)
+        val file = File.createTempFile(
+            "eva-reply-",
+            ".${audioExtensionForMime(mimeType)}",
+            context.cacheDir
+        )
+        file.writeBytes(bytes)
+        MediaPlayer().apply {
+            setDataSource(file.absolutePath)
+            setOnPreparedListener { player -> player.start() }
+            setOnCompletionListener { player ->
+                player.release()
+                file.delete()
+            }
+            setOnErrorListener { player, _, _ ->
+                player.release()
+                file.delete()
+                true
+            }
+            prepareAsync()
+        }
+    }
+}
+
+private fun audioExtensionForMime(mimeType: String): String =
+    when {
+        mimeType.contains("mpeg") || mimeType.contains("mp3") -> "mp3"
+        mimeType.contains("ogg") || mimeType.contains("opus") -> "ogg"
+        mimeType.contains("wav") -> "wav"
+        else -> "m4a"
+    }
 
 @Composable
 private fun EvaApplication(
@@ -1280,7 +1484,11 @@ private fun EvaShell(controller: EvaAppController, user: EvaUser, scope: Corouti
             label = "eva-shell"
         ) {
             when {
-                controller.callOpen -> CallScreen(onClose = { controller.callOpen = false })
+                controller.callOpen -> CallScreen(
+                    controller = controller,
+                    scope = scope,
+                    onClose = { controller.callOpen = false }
+                )
                 controller.premiumOpen -> PremiumScreen(
                     onBack = { controller.premiumOpen = false },
                     onContinue = { plan -> controller.notice = "$plan selected" }
@@ -1546,6 +1754,63 @@ private fun MoodPanel(onQuickMessage: (String) -> Unit) {
 @Composable
 private fun ChatScreen(controller: EvaAppController, scope: CoroutineScope) {
     val focusManager = LocalFocusManager.current
+    val context = LocalContext.current
+    val recorder = remember(context) { EvaAudioRecorder(context) }
+    var recording by remember { mutableStateOf(false) }
+    val permissionLauncher = rememberLauncherForActivityResult(
+        ActivityResultContracts.RequestPermission()
+    ) { granted ->
+        if (granted) {
+            runCatching {
+                recorder.start()
+                recording = true
+                controller.notice = "Recording..."
+            }.onFailure { error ->
+                controller.notice = error.cleanMessage("Could not start recording.")
+            }
+        } else {
+            controller.notice = "Microphone permission is needed for voice messages."
+        }
+    }
+    val startRecording: () -> Unit = {
+        when {
+            controller.sending -> controller.notice = "Wait for Eva to finish replying first."
+            ContextCompat.checkSelfPermission(
+                context,
+                Manifest.permission.RECORD_AUDIO
+            ) == PackageManager.PERMISSION_GRANTED -> {
+                runCatching {
+                    recorder.start()
+                    recording = true
+                    controller.notice = "Recording..."
+                }.onFailure { error ->
+                    controller.notice = error.cleanMessage("Could not start recording.")
+                }
+            }
+
+            else -> permissionLauncher.launch(Manifest.permission.RECORD_AUDIO)
+        }
+    }
+    val finishRecording: () -> Unit = {
+        val audioBytes = runCatching { recorder.stop() }
+            .onFailure { error ->
+                controller.notice = error.cleanMessage("Could not send that recording.")
+            }
+            .getOrNull()
+        recording = false
+        if (audioBytes != null) {
+            scope.launch {
+                controller.sendVoiceNote(audioBytes)?.let { result ->
+                    playBase64Audio(context, result.audioBase64, result.audioMimeType)
+                }
+            }
+        }
+    }
+
+    DisposableEffect(Unit) {
+        onDispose { recorder.cancel() }
+    }
+
     EvaPage(backgroundImage = R.drawable.model_riya) {
         Column(Modifier.fillMaxSize()) {
             ChatHeader(
@@ -1582,13 +1847,16 @@ private fun ChatScreen(controller: EvaAppController, scope: CoroutineScope) {
             ChatComposer(
                 draft = controller.draft,
                 sending = controller.sending,
+                recording = recording,
                 onDraftChange = { controller.draft = it },
                 onSend = {
                     focusManager.clearFocus()
                     scope.launch { controller.sendMessage() }
                 },
                 onAttachment = controller::sendAttachment,
-                onVoice = controller::sendVoiceNote
+                onVoice = {
+                    if (recording) finishRecording() else startRecording()
+                }
             )
         }
     }
@@ -1786,6 +2054,7 @@ private fun VoiceNoteBubble(seconds: Int, fromUser: Boolean) {
 private fun ChatComposer(
     draft: String,
     sending: Boolean,
+    recording: Boolean,
     onDraftChange: (String) -> Unit,
     onSend: () -> Unit,
     onAttachment: (String) -> Unit,
@@ -1858,14 +2127,22 @@ private fun ChatComposer(
                     modifier = Modifier
                         .size(54.dp)
                         .clip(CircleShape)
-                        .background(EvaColors.Gradient)
-                        .clickable(enabled = !sending) {
-                            if (draft.trim().isNotEmpty()) onSend() else onVoice()
+                        .background(
+                            if (recording) Brush.linearGradient(listOf(Color(0xFFE53945), EvaColors.Coral))
+                            else EvaColors.Gradient
+                        )
+                        .clickable(enabled = !sending || recording) {
+                            when {
+                                recording -> onVoice()
+                                draft.trim().isNotEmpty() -> onSend()
+                                else -> onVoice()
+                            }
                         },
                     contentAlignment = Alignment.Center
                 ) {
                     Icon(
                         when {
+                            recording -> Icons.Rounded.MicOff
                             sending -> Icons.Rounded.GraphicEq
                             draft.trim().isNotEmpty() -> Icons.Rounded.Send
                             else -> Icons.Rounded.Mic
@@ -2264,10 +2541,69 @@ private fun ProfileScreen(controller: EvaAppController, user: EvaUser) {
 }
 
 @Composable
-private fun CallScreen(onClose: () -> Unit) {
+private fun CallScreen(
+    controller: EvaAppController,
+    scope: CoroutineScope,
+    onClose: () -> Unit
+) {
+    val context = LocalContext.current
+    val recorder = remember(context) { EvaAudioRecorder(context) }
     var seconds by remember { mutableIntStateOf(0) }
-    var muted by remember { mutableStateOf(false) }
+    var recording by remember { mutableStateOf(false) }
     var speaker by remember { mutableStateOf(true) }
+    val permissionLauncher = rememberLauncherForActivityResult(
+        ActivityResultContracts.RequestPermission()
+    ) { granted ->
+        if (granted) {
+            runCatching {
+                recorder.start()
+                recording = true
+                controller.notice = "Recording..."
+            }.onFailure { error ->
+                controller.notice = error.cleanMessage("Could not start recording.")
+            }
+        } else {
+            controller.notice = "Microphone permission is needed for calls."
+        }
+    }
+    val startRecording: () -> Unit = {
+        when {
+            controller.sending -> controller.notice = "Wait for Eva to finish replying first."
+            ContextCompat.checkSelfPermission(
+                context,
+                Manifest.permission.RECORD_AUDIO
+            ) == PackageManager.PERMISSION_GRANTED -> {
+                runCatching {
+                    recorder.start()
+                    recording = true
+                    controller.notice = "Recording..."
+                }.onFailure { error ->
+                    controller.notice = error.cleanMessage("Could not start recording.")
+                }
+            }
+
+            else -> permissionLauncher.launch(Manifest.permission.RECORD_AUDIO)
+        }
+    }
+    val finishRecording: () -> Unit = {
+        val audioBytes = runCatching { recorder.stop() }
+            .onFailure { error ->
+                controller.notice = error.cleanMessage("Could not send that recording.")
+            }
+            .getOrNull()
+        recording = false
+        if (audioBytes != null) {
+            scope.launch {
+                controller.sendVoiceNote(audioBytes, stayInCall = true)?.let { result ->
+                    playBase64Audio(context, result.audioBase64, result.audioMimeType)
+                }
+            }
+        }
+    }
+
+    DisposableEffect(Unit) {
+        onDispose { recorder.cancel() }
+    }
 
     LaunchedEffect(Unit) {
         while (true) {
@@ -2327,10 +2663,20 @@ private fun CallScreen(onClose: () -> Unit) {
                 verticalAlignment = Alignment.CenterVertically
             ) {
                 CallAction(
-                    icon = if (muted) Icons.Rounded.MicOff else Icons.Rounded.Mic,
-                    label = if (muted) "Muted" else "Mute",
-                    active = muted,
-                    onClick = { muted = !muted }
+                    icon = when {
+                        controller.sending -> Icons.Rounded.GraphicEq
+                        recording -> Icons.Rounded.MicOff
+                        else -> Icons.Rounded.Mic
+                    },
+                    label = when {
+                        controller.sending -> "Eva"
+                        recording -> "Send"
+                        else -> "Talk"
+                    },
+                    active = recording || controller.sending,
+                    onClick = {
+                        if (recording) finishRecording() else startRecording()
+                    }
                 )
                 Box(
                     modifier = Modifier
