@@ -66,6 +66,7 @@ import androidx.compose.material.icons.rounded.ChatBubbleOutline
 import androidx.compose.material.icons.rounded.CheckCircle
 import androidx.compose.material.icons.rounded.ChevronRight
 import androidx.compose.material.icons.rounded.DarkMode
+import androidx.compose.material.icons.rounded.Delete
 import androidx.compose.material.icons.rounded.Favorite
 import androidx.compose.material.icons.rounded.GraphicEq
 import androidx.compose.material.icons.rounded.Home
@@ -290,6 +291,25 @@ private data class VoiceSendResult(
     val audioMimeType: String
 )
 
+private data class VoiceRecordingPreview(
+    val audioBytes: ByteArray,
+    val mimeType: String,
+    val durationSeconds: Int
+) {
+    override fun equals(other: Any?): Boolean =
+        other is VoiceRecordingPreview &&
+            audioBytes.contentEquals(other.audioBytes) &&
+            mimeType == other.mimeType &&
+            durationSeconds == other.durationSeconds
+
+    override fun hashCode(): Int {
+        var result = audioBytes.contentHashCode()
+        result = 31 * result + mimeType.hashCode()
+        result = 31 * result + durationSeconds
+        return result
+    }
+}
+
 private class EvaAppController(context: Context) {
     private val appContext = context.applicationContext
     private val api = MeriGfApi(appContext)
@@ -313,8 +333,7 @@ private class EvaAppController(context: Context) {
 
     suspend fun bootstrap() {
         authState = AuthState.Loading
-        val token = api.savedAccessToken()
-        if (token.isNullOrBlank()) {
+        if (!api.hasSavedSession()) {
             authState = AuthState.SignedOut
             return
         }
@@ -325,9 +344,19 @@ private class EvaAppController(context: Context) {
                 authState = AuthState.SignedIn(user)
                 loadChats()
             }
-            .onFailure {
-                api.clearSession()
-                authState = AuthState.SignedOut
+            .onFailure { error ->
+                val cachedUser = api.savedUser()
+                if (error is ApiException && error.statusCode == HttpURLConnection.HTTP_UNAUTHORIZED) {
+                    api.clearSession()
+                    authState = AuthState.SignedOut
+                } else if (cachedUser != null) {
+                    authState = AuthState.SignedIn(cachedUser)
+                    backendLive = false
+                    notice = "Could not reach the backend. Keeping you signed in."
+                    if (messages.isEmpty()) seedLocalMessages()
+                } else {
+                    authState = AuthState.SignedOut
+                }
             }
         authBusy = false
     }
@@ -624,6 +653,21 @@ private class MeriGfApi(context: Context) {
 
     fun savedAccessToken(): String? = prefs.getString("access_token", null)
 
+    private fun savedRefreshToken(): String? = prefs.getString("refresh_token", null)
+
+    fun hasSavedSession(): Boolean =
+        !savedAccessToken().isNullOrBlank() || !savedRefreshToken().isNullOrBlank()
+
+    fun savedUser(): EvaUser? {
+        val id = prefs.getString("user_id", null)?.takeIf { it.isNotBlank() } ?: return null
+        return EvaUser(
+            id = id,
+            name = prefs.getString("user_name", null)?.takeIf { it.isNotBlank() } ?: "Vardhan",
+            email = prefs.getString("user_email", null).orEmpty(),
+            avatarUrl = prefs.getString("user_avatar_url", null)?.takeIf { it.isNotBlank() }
+        )
+    }
+
     fun clearSession() {
         prefs.edit().clear().apply()
     }
@@ -654,6 +698,7 @@ private class MeriGfApi(context: Context) {
             .getOrElse {
                 EvaUser(id = "google-user", name = "Vardhan", email = "")
             }
+        saveUser(user)
         return AuthSession(accessToken, refreshToken, user)
     }
 
@@ -692,7 +737,7 @@ private class MeriGfApi(context: Context) {
 
     suspend fun me(): EvaUser {
         val data = requestObject(method = "GET", path = "/auth/me")
-        return parseUser(data.optJSONObject("user") ?: data)
+        return parseUser(data.optJSONObject("user") ?: data).also(::saveUser)
     }
 
     suspend fun conversations(): List<ConversationPreview> {
@@ -823,8 +868,18 @@ private class MeriGfApi(context: Context) {
             .putString("access_token", accessToken)
             .putString("refresh_token", refreshToken)
             .apply()
+        saveUser(user)
 
         return AuthSession(accessToken, refreshToken, user)
+    }
+
+    private fun saveUser(user: EvaUser) {
+        prefs.edit()
+            .putString("user_id", user.id)
+            .putString("user_name", user.name)
+            .putString("user_email", user.email)
+            .putString("user_avatar_url", user.avatarUrl.orEmpty())
+            .apply()
     }
 
     private fun parseUser(json: JSONObject): EvaUser {
@@ -844,9 +899,10 @@ private class MeriGfApi(context: Context) {
         method: String,
         path: String,
         body: JSONObject? = null,
-        authorized: Boolean = true
+        authorized: Boolean = true,
+        allowRefresh: Boolean = true
     ): JSONObject {
-        val data = requestJson(method, path, body, authorized)
+        val data = requestJson(method, path, body, authorized, allowRefresh)
         return data as? JSONObject ?: throw ApiException("Backend returned an unexpected response.")
     }
 
@@ -854,7 +910,8 @@ private class MeriGfApi(context: Context) {
         method: String,
         path: String,
         body: JSONObject? = null,
-        authorized: Boolean = true
+        authorized: Boolean = true,
+        allowRefresh: Boolean = true
     ): Any = withContext(Dispatchers.IO) {
         val url = URI("$baseUrl$path").toURL()
         val connection = (url.openConnection() as HttpURLConnection).apply {
@@ -887,16 +944,31 @@ private class MeriGfApi(context: Context) {
             }
             val responseText = responseStream.bufferedReader(Charsets.UTF_8).use { it.readText() }
 
+            if (
+                code == HttpURLConnection.HTTP_UNAUTHORIZED &&
+                authorized &&
+                allowRefresh &&
+                refreshSessionIfPossible()
+            ) {
+                return@withContext requestJson(
+                    method = method,
+                    path = path,
+                    body = body,
+                    authorized = true,
+                    allowRefresh = false
+                )
+            }
+
             if (responseText.isBlank()) {
                 if (code in 200..299) return@withContext JSONObject()
-                throw ApiException("Backend returned $code.")
+                throw ApiException("Backend returned $code.", code)
             }
 
             val root = JSONObject(responseText)
             if (code !in 200..299 || root.optBoolean("success", true) == false) {
                 val message = root.optJSONObject("error")?.optString("message")
                     ?: root.optString("message", "Backend returned $code.")
-                throw ApiException(message)
+                throw ApiException(message, code)
             }
             val data = root.opt("data")
             if (data == null || data == JSONObject.NULL) root else data
@@ -904,9 +976,23 @@ private class MeriGfApi(context: Context) {
             connection.disconnect()
         }
     }
+
+    private suspend fun refreshSessionIfPossible(): Boolean {
+        val refreshToken = savedRefreshToken()?.takeIf { it.isNotBlank() } ?: return false
+        return runCatching {
+            val data = requestObject(
+                method = "POST",
+                path = "/auth/refresh",
+                body = JSONObject().put("refreshToken", refreshToken),
+                authorized = false,
+                allowRefresh = false
+            )
+            saveSession(data)
+        }.isSuccess
+    }
 }
 
-private class ApiException(message: String) : Exception(message)
+private class ApiException(message: String, val statusCode: Int? = null) : Exception(message)
 
 private class EvaAudioRecorder(private val context: Context) {
     private var recorder: MediaRecorder? = null
@@ -970,13 +1056,19 @@ private fun legacyMediaRecorder(): MediaRecorder = MediaRecorder()
 private fun playBase64Audio(context: Context, base64Audio: String, mimeType: String) {
     if (base64Audio.isBlank()) return
     runCatching {
-        val bytes = Base64.decode(base64Audio, Base64.DEFAULT)
+        playAudioBytes(context, Base64.decode(base64Audio, Base64.DEFAULT), mimeType)
+    }
+}
+
+private fun playAudioBytes(context: Context, audioBytes: ByteArray, mimeType: String) {
+    if (audioBytes.isEmpty()) return
+    runCatching {
         val file = File.createTempFile(
             "eva-reply-",
             ".${audioExtensionForMime(mimeType)}",
             context.cacheDir
         )
-        file.writeBytes(bytes)
+        file.writeBytes(audioBytes)
         MediaPlayer().apply {
             setDataSource(file.absolutePath)
             setOnPreparedListener { player -> player.start() }
@@ -1757,12 +1849,18 @@ private fun ChatScreen(controller: EvaAppController, scope: CoroutineScope) {
     val context = LocalContext.current
     val recorder = remember(context) { EvaAudioRecorder(context) }
     var recording by remember { mutableStateOf(false) }
+    var recordingStartedAt by remember { mutableStateOf(0L) }
+    var recordingSeconds by remember { mutableIntStateOf(0) }
+    var voicePreview by remember { mutableStateOf<VoiceRecordingPreview?>(null) }
     val permissionLauncher = rememberLauncherForActivityResult(
         ActivityResultContracts.RequestPermission()
     ) { granted ->
         if (granted) {
             runCatching {
                 recorder.start()
+                voicePreview = null
+                recordingStartedAt = System.currentTimeMillis()
+                recordingSeconds = 0
                 recording = true
                 controller.notice = "Recording..."
             }.onFailure { error ->
@@ -1781,6 +1879,9 @@ private fun ChatScreen(controller: EvaAppController, scope: CoroutineScope) {
             ) == PackageManager.PERMISSION_GRANTED -> {
                 runCatching {
                     recorder.start()
+                    voicePreview = null
+                    recordingStartedAt = System.currentTimeMillis()
+                    recordingSeconds = 0
                     recording = true
                     controller.notice = "Recording..."
                 }.onFailure { error ->
@@ -1794,21 +1895,42 @@ private fun ChatScreen(controller: EvaAppController, scope: CoroutineScope) {
     val finishRecording: () -> Unit = {
         val audioBytes = runCatching { recorder.stop() }
             .onFailure { error ->
-                controller.notice = error.cleanMessage("Could not send that recording.")
+                controller.notice = error.cleanMessage("Could not save that recording.")
             }
             .getOrNull()
         recording = false
         if (audioBytes != null) {
+            voicePreview = VoiceRecordingPreview(
+                audioBytes = audioBytes,
+                mimeType = "audio/mp4",
+                durationSeconds = max(1, ((System.currentTimeMillis() - recordingStartedAt) / 1000L).toInt())
+            )
+        }
+    }
+    DisposableEffect(Unit) {
+        onDispose { recorder.cancel() }
+    }
+
+    LaunchedEffect(recording) {
+        while (recording) {
+            recordingSeconds = max(1, ((System.currentTimeMillis() - recordingStartedAt) / 1000L).toInt())
+            delay(250)
+        }
+    }
+
+    val submitVoicePreview: () -> Unit = {
+        val preview = voicePreview
+        if (preview != null) {
             scope.launch {
-                controller.sendVoiceNote(audioBytes)?.let { result ->
+                controller.sendVoiceNote(
+                    audioBytes = preview.audioBytes,
+                    mimeType = preview.mimeType
+                )?.let { result ->
+                    voicePreview = null
                     playBase64Audio(context, result.audioBase64, result.audioMimeType)
                 }
             }
         }
-    }
-
-    DisposableEffect(Unit) {
-        onDispose { recorder.cancel() }
     }
 
     EvaPage(backgroundImage = R.drawable.model_riya) {
@@ -1848,15 +1970,24 @@ private fun ChatScreen(controller: EvaAppController, scope: CoroutineScope) {
                 draft = controller.draft,
                 sending = controller.sending,
                 recording = recording,
+                recordingSeconds = recordingSeconds,
+                voicePreview = voicePreview,
                 onDraftChange = { controller.draft = it },
                 onSend = {
                     focusManager.clearFocus()
                     scope.launch { controller.sendMessage() }
                 },
                 onAttachment = controller::sendAttachment,
-                onVoice = {
+                onVoiceRecord = {
                     if (recording) finishRecording() else startRecording()
-                }
+                },
+                onVoiceReplay = {
+                    voicePreview?.let { preview ->
+                        playAudioBytes(context, preview.audioBytes, preview.mimeType)
+                    }
+                },
+                onVoiceDelete = { voicePreview = null },
+                onVoiceSend = submitVoicePreview
             )
         }
     }
@@ -2055,10 +2186,15 @@ private fun ChatComposer(
     draft: String,
     sending: Boolean,
     recording: Boolean,
+    recordingSeconds: Int,
+    voicePreview: VoiceRecordingPreview?,
     onDraftChange: (String) -> Unit,
     onSend: () -> Unit,
     onAttachment: (String) -> Unit,
-    onVoice: () -> Unit
+    onVoiceRecord: () -> Unit,
+    onVoiceReplay: () -> Unit,
+    onVoiceDelete: () -> Unit,
+    onVoiceSend: () -> Unit
 ) {
     var attachmentPickerOpen by remember { mutableStateOf(false) }
     var emojiPickerOpen by remember { mutableStateOf(false) }
@@ -2089,69 +2225,176 @@ private fun ChatComposer(
         GlassCard(
             padding = PaddingValues(start = 8.dp, top = 4.dp, end = 8.dp, bottom = 4.dp)
         ) {
-            Row(verticalAlignment = Alignment.CenterVertically) {
-                IconButton(onClick = { emojiPickerOpen = !emojiPickerOpen }) {
-                    Icon(
-                        Icons.Rounded.SentimentSatisfiedAlt,
-                        contentDescription = "Emoji",
-                        tint = evaMuted()
-                    )
-                }
-                TextField(
-                    value = draft,
-                    onValueChange = onDraftChange,
-                    modifier = Modifier.weight(1f),
-                    minLines = 1,
-                    maxLines = 4,
-                    textStyle = MaterialTheme.typography.bodyLarge.copy(
-                        color = evaText(),
-                        fontWeight = FontWeight.Bold
-                    ),
-                    placeholder = {
-                        Text("Type a message...", color = evaMuted().copy(alpha = 0.62f))
-                    },
-                    keyboardOptions = KeyboardOptions(imeAction = ImeAction.Send),
-                    keyboardActions = KeyboardActions(onSend = { onSend() }),
-                    colors = TextFieldDefaults.colors(
-                        focusedContainerColor = Color.Transparent,
-                        unfocusedContainerColor = Color.Transparent,
-                        disabledContainerColor = Color.Transparent,
-                        focusedIndicatorColor = Color.Transparent,
-                        unfocusedIndicatorColor = Color.Transparent
-                    )
+            when {
+                voicePreview != null -> VoicePreviewComposer(
+                    preview = voicePreview,
+                    sending = sending,
+                    onReplay = onVoiceReplay,
+                    onDelete = onVoiceDelete,
+                    onSend = onVoiceSend
                 )
-                IconButton(onClick = { attachmentPickerOpen = !attachmentPickerOpen }) {
-                    Icon(Icons.Rounded.AttachFile, contentDescription = "Attach", tint = evaMuted())
-                }
-                Box(
-                    modifier = Modifier
-                        .size(54.dp)
-                        .clip(CircleShape)
-                        .background(
-                            if (recording) Brush.linearGradient(listOf(Color(0xFFE53945), EvaColors.Coral))
-                            else EvaColors.Gradient
+
+                recording -> RecordingComposer(
+                    seconds = recordingSeconds,
+                    onStop = onVoiceRecord
+                )
+
+                else -> Row(verticalAlignment = Alignment.CenterVertically) {
+                    IconButton(onClick = { emojiPickerOpen = !emojiPickerOpen }) {
+                        Icon(
+                            Icons.Rounded.SentimentSatisfiedAlt,
+                            contentDescription = "Emoji",
+                            tint = evaMuted()
                         )
-                        .clickable(enabled = !sending || recording) {
-                            when {
-                                recording -> onVoice()
-                                draft.trim().isNotEmpty() -> onSend()
-                                else -> onVoice()
-                            }
+                    }
+                    TextField(
+                        value = draft,
+                        onValueChange = onDraftChange,
+                        modifier = Modifier.weight(1f),
+                        minLines = 1,
+                        maxLines = 4,
+                        textStyle = MaterialTheme.typography.bodyLarge.copy(
+                            color = evaText(),
+                            fontWeight = FontWeight.Bold
+                        ),
+                        placeholder = {
+                            Text("Type a message...", color = evaMuted().copy(alpha = 0.62f))
                         },
-                    contentAlignment = Alignment.Center
-                ) {
-                    Icon(
-                        when {
-                            recording -> Icons.Rounded.MicOff
-                            sending -> Icons.Rounded.GraphicEq
-                            draft.trim().isNotEmpty() -> Icons.Rounded.Send
-                            else -> Icons.Rounded.Mic
-                        },
-                        contentDescription = null,
-                        tint = Color.White
+                        keyboardOptions = KeyboardOptions(imeAction = ImeAction.Send),
+                        keyboardActions = KeyboardActions(onSend = { onSend() }),
+                        colors = TextFieldDefaults.colors(
+                            focusedContainerColor = Color.Transparent,
+                            unfocusedContainerColor = Color.Transparent,
+                            disabledContainerColor = Color.Transparent,
+                            focusedIndicatorColor = Color.Transparent,
+                            unfocusedIndicatorColor = Color.Transparent
+                        )
                     )
+                    IconButton(onClick = { attachmentPickerOpen = !attachmentPickerOpen }) {
+                        Icon(Icons.Rounded.AttachFile, contentDescription = "Attach", tint = evaMuted())
+                    }
+                    Box(
+                        modifier = Modifier
+                            .size(54.dp)
+                            .clip(CircleShape)
+                            .background(EvaColors.Gradient)
+                            .clickable(enabled = !sending) {
+                                if (draft.trim().isNotEmpty()) onSend() else onVoiceRecord()
+                            },
+                        contentAlignment = Alignment.Center
+                    ) {
+                        Icon(
+                            when {
+                                sending -> Icons.Rounded.GraphicEq
+                                draft.trim().isNotEmpty() -> Icons.Rounded.Send
+                                else -> Icons.Rounded.Mic
+                            },
+                            contentDescription = null,
+                            tint = Color.White
+                        )
+                    }
                 }
             }
+        }
+    }
+}
+
+@Composable
+private fun RecordingComposer(seconds: Int, onStop: () -> Unit) {
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .height(54.dp),
+        verticalAlignment = Alignment.CenterVertically
+    ) {
+        Box(
+            modifier = Modifier
+                .size(42.dp)
+                .clip(CircleShape)
+                .background(Color(0xFFE53945).copy(alpha = 0.18f)),
+            contentAlignment = Alignment.Center
+        ) {
+            Box(
+                modifier = Modifier
+                    .size(10.dp)
+                    .clip(CircleShape)
+                    .background(Color(0xFFE53945))
+            )
+        }
+        Spacer(Modifier.width(12.dp))
+        Column(Modifier.weight(1f)) {
+            Text("Recording", color = evaText(), fontWeight = FontWeight.Black, fontSize = 14.sp)
+            Text(formatDuration(seconds), color = evaMuted(), fontSize = 12.sp, fontWeight = FontWeight.Bold)
+        }
+        WaveBars(
+            color = EvaColors.Pink,
+            modifier = Modifier
+                .width(88.dp)
+                .height(34.dp),
+            phase = seconds.toFloat()
+        )
+        Spacer(Modifier.width(10.dp))
+        Box(
+            modifier = Modifier
+                .size(48.dp)
+                .clip(CircleShape)
+                .background(Brush.linearGradient(listOf(Color(0xFFE53945), EvaColors.Coral)))
+                .clickable(onClick = onStop),
+            contentAlignment = Alignment.Center
+        ) {
+            Icon(Icons.Rounded.MicOff, contentDescription = "Stop recording", tint = Color.White)
+        }
+    }
+}
+
+@Composable
+private fun VoicePreviewComposer(
+    preview: VoiceRecordingPreview,
+    sending: Boolean,
+    onReplay: () -> Unit,
+    onDelete: () -> Unit,
+    onSend: () -> Unit
+) {
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .height(54.dp),
+        verticalAlignment = Alignment.CenterVertically
+    ) {
+        IconButton(onClick = onReplay, enabled = !sending) {
+            Icon(Icons.Rounded.PlayArrow, contentDescription = "Replay", tint = EvaColors.Pink)
+        }
+        Column(Modifier.weight(1f)) {
+            Text("Voice note", color = evaText(), fontWeight = FontWeight.Black, fontSize = 14.sp)
+            Text(
+                formatDuration(preview.durationSeconds),
+                color = evaMuted(),
+                fontSize = 12.sp,
+                fontWeight = FontWeight.Bold
+            )
+        }
+        WaveBars(
+            color = evaText().copy(alpha = 0.72f),
+            modifier = Modifier
+                .width(92.dp)
+                .height(34.dp)
+        )
+        IconButton(onClick = onDelete, enabled = !sending) {
+            Icon(Icons.Rounded.Delete, contentDescription = "Delete recording", tint = evaMuted())
+        }
+        Box(
+            modifier = Modifier
+                .size(48.dp)
+                .clip(CircleShape)
+                .background(EvaColors.Gradient)
+                .clickable(enabled = !sending, onClick = onSend),
+            contentAlignment = Alignment.Center
+        ) {
+            Icon(
+                if (sending) Icons.Rounded.GraphicEq else Icons.Rounded.Send,
+                contentDescription = "Send recording",
+                tint = Color.White
+            )
         }
     }
 }
