@@ -20,7 +20,6 @@ import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.animation.AnimatedContent
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.foundation.BorderStroke
-import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
@@ -76,7 +75,6 @@ import androidx.compose.material.icons.rounded.LocationOn
 import androidx.compose.material.icons.rounded.LockOpen
 import androidx.compose.material.icons.rounded.Menu
 import androidx.compose.material.icons.rounded.Mic
-import androidx.compose.material.icons.rounded.MicOff
 import androidx.compose.material.icons.rounded.MoreVert
 import androidx.compose.material.icons.rounded.PersonOutline
 import androidx.compose.material.icons.rounded.PhoneInTalk
@@ -127,7 +125,6 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.focus.onFocusEvent
-import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.toArgb
@@ -163,9 +160,7 @@ import java.io.File
 import java.util.Date
 import java.util.Locale
 import java.util.UUID
-import kotlin.math.abs
 import kotlin.math.max
-import kotlin.math.sin
 
 class MainActivity : ComponentActivity() {
     private lateinit var controller: EvaAppController
@@ -2147,14 +2142,15 @@ private fun MessageBubble(message: ChatMessage) {
 
 @Composable
 private fun VoiceNoteBubble(seconds: Int, fromUser: Boolean) {
-    val waveColor = if (fromUser) Color.White else evaText()
+    val iconColor = if (fromUser) Color.White else EvaColors.Pink
+    val textColor = if (fromUser) Color.White else evaText()
     Row(
-        modifier = Modifier.width(220.dp),
+        modifier = Modifier.width(178.dp),
         verticalAlignment = Alignment.CenterVertically
     ) {
         Box(
             modifier = Modifier
-                .size(36.dp)
+                .size(38.dp)
                 .clip(CircleShape)
                 .background(
                     if (fromUser) Color.White.copy(alpha = 0.22f)
@@ -2162,22 +2158,19 @@ private fun VoiceNoteBubble(seconds: Int, fromUser: Boolean) {
                 ),
             contentAlignment = Alignment.Center
         ) {
-            Icon(Icons.Rounded.PlayArrow, contentDescription = null, tint = waveColor)
+            Icon(Icons.Rounded.PlayArrow, contentDescription = null, tint = iconColor)
         }
-        Spacer(Modifier.width(10.dp))
-        WaveBars(
-            color = waveColor.copy(alpha = if (fromUser) 0.86f else 0.72f),
-            modifier = Modifier
-                .weight(1f)
-                .height(34.dp)
-        )
-        Spacer(Modifier.width(10.dp))
-        Text(
-            formatDuration(seconds),
-            color = waveColor.copy(alpha = 0.82f),
-            fontSize = 12.sp,
-            fontWeight = FontWeight.Black
-        )
+        Spacer(Modifier.width(11.dp))
+        Column(Modifier.weight(1f)) {
+            Text("Voice note", color = textColor, fontSize = 13.sp, fontWeight = FontWeight.Black)
+            Spacer(Modifier.height(2.dp))
+            Text(
+                formatDuration(seconds),
+                color = textColor.copy(alpha = 0.72f),
+                fontSize = 12.sp,
+                fontWeight = FontWeight.Bold
+            )
+        }
     }
 }
 
@@ -2285,7 +2278,7 @@ private fun ChatComposer(
                     ) {
                         Icon(
                             when {
-                                sending -> Icons.Rounded.GraphicEq
+                                sending -> Icons.Rounded.Send
                                 draft.trim().isNotEmpty() -> Icons.Rounded.Send
                                 else -> Icons.Rounded.Mic
                             },
@@ -2304,7 +2297,7 @@ private fun RecordingComposer(seconds: Int, onStop: () -> Unit) {
     Row(
         modifier = Modifier
             .fillMaxWidth()
-            .height(54.dp),
+            .height(58.dp),
         verticalAlignment = Alignment.CenterVertically
     ) {
         Box(
@@ -2323,26 +2316,29 @@ private fun RecordingComposer(seconds: Int, onStop: () -> Unit) {
         }
         Spacer(Modifier.width(12.dp))
         Column(Modifier.weight(1f)) {
-            Text("Recording", color = evaText(), fontWeight = FontWeight.Black, fontSize = 14.sp)
+            Text("Recording voice", color = evaText(), fontWeight = FontWeight.Black, fontSize = 14.sp)
+            Spacer(Modifier.height(2.dp))
             Text(formatDuration(seconds), color = evaMuted(), fontSize = 12.sp, fontWeight = FontWeight.Bold)
         }
-        WaveBars(
-            color = EvaColors.Pink,
-            modifier = Modifier
-                .width(88.dp)
-                .height(34.dp),
-            phase = seconds.toFloat()
-        )
-        Spacer(Modifier.width(10.dp))
         Box(
             modifier = Modifier
-                .size(48.dp)
-                .clip(CircleShape)
+                .height(44.dp)
+                .width(96.dp)
+                .clip(RoundedCornerShape(24.dp))
                 .background(Brush.linearGradient(listOf(Color(0xFFE53945), EvaColors.Coral)))
                 .clickable(onClick = onStop),
             contentAlignment = Alignment.Center
         ) {
-            Icon(Icons.Rounded.MicOff, contentDescription = "Stop recording", tint = Color.White)
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Icon(
+                    Icons.Rounded.CheckCircle,
+                    contentDescription = "Finish recording",
+                    tint = Color.White,
+                    modifier = Modifier.size(18.dp)
+                )
+                Spacer(Modifier.width(6.dp))
+                Text("Done", color = Color.White, fontWeight = FontWeight.Black, fontSize = 13.sp)
+            }
         }
     }
 }
@@ -2358,14 +2354,20 @@ private fun VoicePreviewComposer(
     Row(
         modifier = Modifier
             .fillMaxWidth()
-            .height(54.dp),
+            .height(58.dp),
         verticalAlignment = Alignment.CenterVertically
     ) {
         IconButton(onClick = onReplay, enabled = !sending) {
             Icon(Icons.Rounded.PlayArrow, contentDescription = "Replay", tint = EvaColors.Pink)
         }
         Column(Modifier.weight(1f)) {
-            Text("Voice note", color = evaText(), fontWeight = FontWeight.Black, fontSize = 14.sp)
+            Text(
+                if (sending) "Sending voice" else "Voice ready",
+                color = evaText(),
+                fontWeight = FontWeight.Black,
+                fontSize = 14.sp
+            )
+            Spacer(Modifier.height(2.dp))
             Text(
                 formatDuration(preview.durationSeconds),
                 color = evaMuted(),
@@ -2373,12 +2375,6 @@ private fun VoicePreviewComposer(
                 fontWeight = FontWeight.Bold
             )
         }
-        WaveBars(
-            color = evaText().copy(alpha = 0.72f),
-            modifier = Modifier
-                .width(92.dp)
-                .height(34.dp)
-        )
         IconButton(onClick = onDelete, enabled = !sending) {
             Icon(Icons.Rounded.Delete, contentDescription = "Delete recording", tint = evaMuted())
         }
@@ -2391,7 +2387,7 @@ private fun VoicePreviewComposer(
             contentAlignment = Alignment.Center
         ) {
             Icon(
-                if (sending) Icons.Rounded.GraphicEq else Icons.Rounded.Send,
+                Icons.Rounded.Send,
                 contentDescription = "Send recording",
                 tint = Color.White
             )
@@ -2895,7 +2891,7 @@ private fun CallScreen(
                     Text("Eva", color = Color.White, fontSize = 27.sp, fontWeight = FontWeight.Black)
                     Text(formatDuration(seconds), color = Color.White, fontSize = 17.sp)
                 }
-                IconGlassButton(icon = Icons.Rounded.GraphicEq, onClick = {}, color = Color.White)
+                IconGlassButton(icon = Icons.Rounded.RecordVoiceOver, onClick = {}, color = Color.White)
             }
             Spacer(Modifier.weight(1f))
             Row(
@@ -2907,13 +2903,13 @@ private fun CallScreen(
             ) {
                 CallAction(
                     icon = when {
-                        controller.sending -> Icons.Rounded.GraphicEq
-                        recording -> Icons.Rounded.MicOff
+                        controller.sending -> Icons.Rounded.ChatBubble
+                        recording -> Icons.Rounded.CheckCircle
                         else -> Icons.Rounded.Mic
                     },
                     label = when {
-                        controller.sending -> "Eva"
-                        recording -> "Send"
+                        controller.sending -> "Replying"
+                        recording -> "Done"
                         else -> "Talk"
                     },
                     active = recording || controller.sending,
@@ -3129,40 +3125,30 @@ private fun DateChip(label: String) {
 }
 
 @Composable
-private fun WaveBars(
-    color: Color,
-    modifier: Modifier = Modifier,
-    phase: Float = 0f
-) {
-    Canvas(modifier = modifier) {
-        val stroke = 3.2.dp.toPx()
-        for (i in 0 until 24) {
-            val x = i * size.width / 23f
-            val height = 8.dp.toPx() + abs(sin(i * 1.35f + phase * 6.28f)) * 24.dp.toPx()
-            drawLine(
-                color = color,
-                start = Offset(x, size.height / 2f - height / 2f),
-                end = Offset(x, size.height / 2f + height / 2f),
-                strokeWidth = stroke
-            )
-        }
-    }
-}
-
-@Composable
 private fun VoiceMemoryTile(modifier: Modifier = Modifier) {
     GlassCard(modifier = modifier.height(148.dp)) {
-        Column(Modifier.fillMaxSize()) {
-            WaveBars(
-                color = EvaColors.Pink,
+        Column(
+            modifier = Modifier.fillMaxSize(),
+            verticalArrangement = Arrangement.SpaceBetween
+        ) {
+            Box(
                 modifier = Modifier
-                    .fillMaxWidth()
-                    .weight(1f)
-            )
-            Row(verticalAlignment = Alignment.CenterVertically) {
-                Icon(Icons.Rounded.RecordVoiceOver, contentDescription = null, modifier = Modifier.size(18.dp))
-                Spacer(Modifier.width(6.dp))
-                Text("3 Voice Notes", fontWeight = FontWeight.Black, fontSize = 12.sp)
+                    .size(52.dp)
+                    .clip(CircleShape)
+                    .background(EvaColors.Pink.copy(alpha = 0.14f)),
+                contentAlignment = Alignment.Center
+            ) {
+                Icon(
+                    Icons.Rounded.RecordVoiceOver,
+                    contentDescription = null,
+                    tint = EvaColors.Pink,
+                    modifier = Modifier.size(27.dp)
+                )
+            }
+            Column {
+                Text("Voice Notes", fontWeight = FontWeight.Black, fontSize = 15.sp)
+                Spacer(Modifier.height(5.dp))
+                Text("3 saved", color = evaMuted(), fontSize = 12.sp, fontWeight = FontWeight.Bold)
             }
         }
     }
