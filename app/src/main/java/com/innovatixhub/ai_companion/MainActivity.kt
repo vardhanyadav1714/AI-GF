@@ -561,7 +561,7 @@ private class EvaAppController(context: Context) {
         )
         messages.add(
             ChatMessage(
-                text = "",
+                text = "Preparing voice reply",
                 fromUser = false,
                 streaming = true
             )
@@ -1933,13 +1933,14 @@ private fun ChatScreen(controller: EvaAppController, scope: CoroutineScope) {
     val submitVoicePreview: () -> Unit = {
         val preview = voicePreview
         if (preview != null) {
+            voicePreview = null
+            focusManager.clearFocus()
             scope.launch {
                 controller.sendVoiceNote(
                     audioBytes = preview.audioBytes,
                     mimeType = preview.mimeType,
                     voiceSeconds = preview.durationSeconds
                 )?.let { result ->
-                    voicePreview = null
                     playBase64Audio(context, result.audioBase64, result.audioMimeType)
                 }
             }
@@ -2183,33 +2184,84 @@ private fun VoiceNoteBubble(
 ) {
     val iconColor = if (fromUser) Color.White else EvaColors.Pink
     val textColor = if (fromUser) Color.White else evaText()
-    val label = if (fromUser) "Your voice" else "Eva voice"
+    val label = if (fromUser) "Voice sent" else "Eva audio"
+    val meta = if (fromUser) "Delivered" else "Tap to listen"
     Row(
-        modifier = Modifier.width(186.dp),
+        modifier = Modifier
+            .width(224.dp)
+            .clickable(enabled = canPlay, onClick = onPlay),
         verticalAlignment = Alignment.CenterVertically
     ) {
         Box(
             modifier = Modifier
-                .size(38.dp)
+                .size(42.dp)
                 .clip(CircleShape)
                 .background(
                     if (fromUser) Color.White.copy(alpha = 0.22f)
                     else EvaColors.Pink.copy(alpha = 0.12f)
-                )
-                .clickable(enabled = canPlay, onClick = onPlay),
+                ),
             contentAlignment = Alignment.Center
         ) {
             Icon(Icons.Rounded.PlayArrow, contentDescription = null, tint = iconColor)
         }
-        Spacer(Modifier.width(11.dp))
+        Spacer(Modifier.width(12.dp))
         Column(Modifier.weight(1f)) {
-            Text(label, color = textColor, fontSize = 13.sp, fontWeight = FontWeight.Black)
-            Spacer(Modifier.height(2.dp))
-            Text(
-                formatDuration(seconds),
-                color = textColor.copy(alpha = 0.72f),
-                fontSize = 12.sp,
-                fontWeight = FontWeight.Bold
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Text(label, color = textColor, fontSize = 13.sp, fontWeight = FontWeight.Black)
+                Spacer(Modifier.width(6.dp))
+                Box(
+                    modifier = Modifier
+                        .size(6.dp)
+                        .clip(CircleShape)
+                        .background(if (canPlay) EvaColors.Green else textColor.copy(alpha = 0.35f))
+                )
+            }
+            Spacer(Modifier.height(7.dp))
+            AudioLevelBars(color = textColor.copy(alpha = if (fromUser) 0.88f else 0.72f))
+            Spacer(Modifier.height(6.dp))
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Text(
+                    formatDuration(seconds),
+                    color = textColor.copy(alpha = 0.74f),
+                    fontSize = 12.sp,
+                    fontWeight = FontWeight.Bold
+                )
+                Spacer(Modifier.width(8.dp))
+                Text(
+                    meta,
+                    color = textColor.copy(alpha = 0.58f),
+                    fontSize = 11.sp,
+                    fontWeight = FontWeight.Bold,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis
+                )
+            }
+        }
+        Spacer(Modifier.width(8.dp))
+        Icon(
+            if (fromUser) Icons.Rounded.CheckCircle else Icons.Rounded.VolumeUp,
+            contentDescription = null,
+            tint = textColor.copy(alpha = 0.72f),
+            modifier = Modifier.size(18.dp)
+        )
+    }
+}
+
+@Composable
+private fun AudioLevelBars(color: Color) {
+    val bars = listOf(8, 13, 18, 11, 20, 15, 9, 17, 12, 19, 10)
+    Row(
+        modifier = Modifier.height(22.dp),
+        verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.spacedBy(3.dp)
+    ) {
+        bars.forEach { height ->
+            Box(
+                modifier = Modifier
+                    .width(3.dp)
+                    .height(height.dp)
+                    .clip(RoundedCornerShape(3.dp))
+                    .background(color)
             )
         }
     }
@@ -2338,33 +2390,37 @@ private fun RecordingComposer(seconds: Int, onStop: () -> Unit) {
     Row(
         modifier = Modifier
             .fillMaxWidth()
-            .height(58.dp),
+            .height(66.dp),
         verticalAlignment = Alignment.CenterVertically
     ) {
         Box(
             modifier = Modifier
-                .size(42.dp)
+                .size(46.dp)
                 .clip(CircleShape)
                 .background(Color(0xFFE53945).copy(alpha = 0.18f)),
             contentAlignment = Alignment.Center
         ) {
             Box(
                 modifier = Modifier
-                    .size(10.dp)
+                    .size(12.dp)
                     .clip(CircleShape)
                     .background(Color(0xFFE53945))
             )
         }
         Spacer(Modifier.width(12.dp))
         Column(Modifier.weight(1f)) {
-            Text("Recording voice", color = evaText(), fontWeight = FontWeight.Black, fontSize = 14.sp)
-            Spacer(Modifier.height(2.dp))
-            Text(formatDuration(seconds), color = evaMuted(), fontSize = 12.sp, fontWeight = FontWeight.Bold)
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Text("Recording", color = evaText(), fontWeight = FontWeight.Black, fontSize = 14.sp)
+                Spacer(Modifier.width(8.dp))
+                Text(formatDuration(seconds), color = EvaColors.Coral, fontSize = 12.sp, fontWeight = FontWeight.Black)
+            }
+            Spacer(Modifier.height(7.dp))
+            AudioLevelBars(color = EvaColors.Coral.copy(alpha = 0.82f))
         }
         Box(
             modifier = Modifier
-                .height(44.dp)
-                .width(96.dp)
+                .height(46.dp)
+                .width(98.dp)
                 .clip(RoundedCornerShape(24.dp))
                 .background(Brush.linearGradient(listOf(Color(0xFFE53945), EvaColors.Coral)))
                 .clickable(onClick = onStop),
@@ -2395,12 +2451,20 @@ private fun VoicePreviewComposer(
     Row(
         modifier = Modifier
             .fillMaxWidth()
-            .height(58.dp),
+            .height(66.dp),
         verticalAlignment = Alignment.CenterVertically
     ) {
-        IconButton(onClick = onReplay, enabled = !sending) {
+        Box(
+            modifier = Modifier
+                .size(46.dp)
+                .clip(CircleShape)
+                .background(EvaColors.Pink.copy(alpha = 0.14f))
+                .clickable(enabled = !sending, onClick = onReplay),
+            contentAlignment = Alignment.Center
+        ) {
             Icon(Icons.Rounded.PlayArrow, contentDescription = "Replay", tint = EvaColors.Pink)
         }
+        Spacer(Modifier.width(12.dp))
         Column(Modifier.weight(1f)) {
             Text(
                 if (sending) "Sending voice" else "Voice ready",
@@ -2408,13 +2472,17 @@ private fun VoicePreviewComposer(
                 fontWeight = FontWeight.Black,
                 fontSize = 14.sp
             )
-            Spacer(Modifier.height(2.dp))
-            Text(
-                formatDuration(preview.durationSeconds),
-                color = evaMuted(),
-                fontSize = 12.sp,
-                fontWeight = FontWeight.Bold
-            )
+            Spacer(Modifier.height(7.dp))
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                AudioLevelBars(color = EvaColors.Pink.copy(alpha = 0.74f))
+                Spacer(Modifier.width(10.dp))
+                Text(
+                    formatDuration(preview.durationSeconds),
+                    color = evaMuted(),
+                    fontSize = 12.sp,
+                    fontWeight = FontWeight.Bold
+                )
+            }
         }
         IconButton(onClick = onDelete, enabled = !sending) {
             Icon(Icons.Rounded.Delete, contentDescription = "Delete recording", tint = evaMuted())
@@ -2828,10 +2896,16 @@ private fun CallScreen(
 ) {
     val context = LocalContext.current
     val recorder = remember(context) { EvaAudioRecorder(context) }
-    var seconds by remember { mutableIntStateOf(0) }
+    var callSeconds by remember { mutableIntStateOf(0) }
+    var recordingSeconds by remember { mutableIntStateOf(0) }
     var recording by remember { mutableStateOf(false) }
     var recordingStartedAt by remember { mutableStateOf(0L) }
     var speaker by remember { mutableStateOf(true) }
+    val callStatus = when {
+        controller.sending -> "Eva is replying"
+        recording -> "Listening to you"
+        else -> "Live voice call"
+    }
     val permissionLauncher = rememberLauncherForActivityResult(
         ActivityResultContracts.RequestPermission()
     ) { granted ->
@@ -2839,6 +2913,7 @@ private fun CallScreen(
             runCatching {
                 recorder.start()
                 recordingStartedAt = System.currentTimeMillis()
+                recordingSeconds = 0
                 recording = true
             }.onFailure { error ->
                 controller.notice = error.cleanMessage("Could not start recording.")
@@ -2857,6 +2932,7 @@ private fun CallScreen(
                 runCatching {
                     recorder.start()
                     recordingStartedAt = System.currentTimeMillis()
+                    recordingSeconds = 0
                     recording = true
                 }.onFailure { error ->
                     controller.notice = error.cleanMessage("Could not start recording.")
@@ -2893,7 +2969,14 @@ private fun CallScreen(
     LaunchedEffect(Unit) {
         while (true) {
             delay(1_000)
-            seconds += 1
+            callSeconds += 1
+        }
+    }
+
+    LaunchedEffect(recording) {
+        while (recording) {
+            recordingSeconds = max(1, ((System.currentTimeMillis() - recordingStartedAt) / 1000L).toInt())
+            delay(250)
         }
     }
 
@@ -2910,9 +2993,9 @@ private fun CallScreen(
                 .background(
                     Brush.verticalGradient(
                         listOf(
-                            Color.Black.copy(alpha = 0.25f),
-                            Color.Transparent,
-                            Color.Black.copy(alpha = 0.78f)
+                            Color.Black.copy(alpha = 0.42f),
+                            Color.Black.copy(alpha = 0.18f),
+                            Color.Black.copy(alpha = 0.88f)
                         )
                     )
                 )
@@ -2934,58 +3017,144 @@ private fun CallScreen(
                     modifier = Modifier.weight(1f),
                     horizontalAlignment = Alignment.CenterHorizontally
                 ) {
-                    Text("Eva", color = Color.White, fontSize = 27.sp, fontWeight = FontWeight.Black)
-                    Text(formatDuration(seconds), color = Color.White, fontSize = 17.sp)
+                    Text("Eva", color = Color.White, fontSize = 24.sp, fontWeight = FontWeight.Black)
+                    Text(formatDuration(callSeconds), color = Color.White.copy(alpha = 0.78f), fontSize = 15.sp)
                 }
-                IconGlassButton(icon = Icons.Rounded.RecordVoiceOver, onClick = {}, color = Color.White)
+                IconGlassButton(
+                    icon = if (controller.sending) Icons.Rounded.GraphicEq else Icons.Rounded.RecordVoiceOver,
+                    onClick = {},
+                    color = if (controller.sending) EvaColors.Pink else Color.White
+                )
             }
-            Spacer(Modifier.weight(1f))
-            Row(
+            Column(
                 modifier = Modifier
                     .fillMaxWidth()
-                    .padding(horizontal = 8.dp, vertical = 16.dp),
-                horizontalArrangement = Arrangement.SpaceBetween,
-                verticalAlignment = Alignment.CenterVertically
+                    .weight(1f),
+                horizontalAlignment = Alignment.CenterHorizontally,
+                verticalArrangement = Arrangement.Center
             ) {
-                CallAction(
-                    icon = when {
-                        controller.sending -> Icons.Rounded.ChatBubble
-                        recording -> Icons.Rounded.CheckCircle
-                        else -> Icons.Rounded.Mic
-                    },
-                    label = when {
-                        controller.sending -> "Replying"
-                        recording -> "Done"
-                        else -> "Talk"
-                    },
-                    active = recording || controller.sending,
-                    onClick = {
-                        if (recording) finishRecording() else startRecording()
-                    }
-                )
-                Box(
-                    modifier = Modifier
-                        .size(78.dp)
-                        .clip(CircleShape)
-                        .background(Color(0xFFE53945))
-                        .clickable { onClose() },
-                    contentAlignment = Alignment.Center
-                ) {
-                    Icon(
-                        Icons.Rounded.CallEnd,
-                        contentDescription = "End call",
-                        tint = Color.White,
-                        modifier = Modifier.size(34.dp)
-                    )
-                }
-                CallAction(
-                    icon = Icons.Rounded.VolumeUp,
-                    label = if (speaker) "Speaker" else "Earpiece",
-                    active = speaker,
-                    onClick = { speaker = !speaker }
+                CallAvatar(active = recording || controller.sending)
+                Spacer(Modifier.height(20.dp))
+                Text("Eva", color = Color.White, fontSize = 34.sp, fontWeight = FontWeight.Black)
+                Spacer(Modifier.height(8.dp))
+                CallStatusPill(status = callStatus, active = recording || controller.sending)
+                Spacer(Modifier.height(16.dp))
+                Text(
+                    if (recording) formatDuration(recordingSeconds) else formatDuration(callSeconds),
+                    color = Color.White.copy(alpha = 0.78f),
+                    fontSize = 18.sp,
+                    fontWeight = FontWeight.ExtraBold
                 )
             }
+            GlassCard(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(horizontal = 4.dp, vertical = 12.dp),
+                padding = PaddingValues(horizontal = 16.dp, vertical = 14.dp),
+                radius = 28.dp,
+                glassOverride = Color.Black.copy(alpha = 0.34f),
+                borderOverride = Color.White.copy(alpha = 0.16f)
+            ) {
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    CallAction(
+                        icon = when {
+                            controller.sending -> Icons.Rounded.GraphicEq
+                            recording -> Icons.Rounded.CheckCircle
+                            else -> Icons.Rounded.Mic
+                        },
+                        label = when {
+                            controller.sending -> "Replying"
+                            recording -> "Done"
+                            else -> "Talk"
+                        },
+                        active = recording || controller.sending,
+                        onClick = {
+                            if (recording) finishRecording() else startRecording()
+                        }
+                    )
+                    Box(
+                        modifier = Modifier
+                            .size(78.dp)
+                            .clip(CircleShape)
+                            .background(Color(0xFFE53945))
+                            .clickable { onClose() },
+                        contentAlignment = Alignment.Center
+                    ) {
+                        Icon(
+                            Icons.Rounded.CallEnd,
+                            contentDescription = "End call",
+                            tint = Color.White,
+                            modifier = Modifier.size(34.dp)
+                        )
+                    }
+                    CallAction(
+                        icon = Icons.Rounded.VolumeUp,
+                        label = if (speaker) "Speaker" else "Earpiece",
+                        active = speaker,
+                        onClick = { speaker = !speaker }
+                    )
+                }
+            }
         }
+    }
+}
+
+@Composable
+private fun CallAvatar(active: Boolean) {
+    Box(
+        modifier = Modifier.size(178.dp),
+        contentAlignment = Alignment.Center
+    ) {
+        Box(
+            modifier = Modifier
+                .size(178.dp)
+                .clip(CircleShape)
+                .background(
+                    if (active) EvaColors.Pink.copy(alpha = 0.16f)
+                    else Color.White.copy(alpha = 0.08f)
+                )
+        )
+        Box(
+            modifier = Modifier
+                .size(150.dp)
+                .clip(CircleShape)
+                .border(
+                    BorderStroke(3.dp, if (active) EvaColors.Pink else Color.White.copy(alpha = 0.45f)),
+                    CircleShape
+                )
+        ) {
+            Image(
+                painter = painterResource(R.drawable.model_riya),
+                contentDescription = "Eva",
+                contentScale = ContentScale.Crop,
+                modifier = Modifier.fillMaxSize()
+            )
+        }
+    }
+}
+
+@Composable
+private fun CallStatusPill(status: String, active: Boolean) {
+    Row(
+        modifier = Modifier
+            .clip(RoundedCornerShape(28.dp))
+            .background(Color.Black.copy(alpha = 0.34f))
+            .border(BorderStroke(1.dp, Color.White.copy(alpha = 0.18f)), RoundedCornerShape(28.dp))
+            .padding(horizontal = 14.dp, vertical = 8.dp),
+        verticalAlignment = Alignment.CenterVertically
+    ) {
+        Box(
+            modifier = Modifier
+                .size(8.dp)
+                .clip(CircleShape)
+                .background(if (active) EvaColors.Pink else EvaColors.Green)
+        )
+        Spacer(Modifier.width(8.dp))
+        Text(status, color = Color.White, fontSize = 13.sp, fontWeight = FontWeight.Black)
     }
 }
 
@@ -3378,14 +3547,25 @@ private fun CallAction(
     active: Boolean,
     onClick: () -> Unit
 ) {
-    Column(horizontalAlignment = Alignment.CenterHorizontally) {
+    Column(
+        modifier = Modifier.width(82.dp),
+        horizontalAlignment = Alignment.CenterHorizontally
+    ) {
         IconGlassButton(
             icon = icon,
             onClick = onClick,
             color = if (active) EvaColors.Pink else Color.White
         )
-        Spacer(Modifier.height(10.dp))
-        Text(label, color = Color.White, fontWeight = FontWeight.ExtraBold)
+        Spacer(Modifier.height(8.dp))
+        Text(
+            label,
+            color = Color.White,
+            fontWeight = FontWeight.ExtraBold,
+            fontSize = 12.sp,
+            maxLines = 1,
+            overflow = TextOverflow.Ellipsis,
+            textAlign = TextAlign.Center
+        )
     }
 }
 
