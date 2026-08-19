@@ -4,6 +4,10 @@ Eva is the Android client for the Meri GF / AI Companion experience. It is built
 
 The app supports Google sign-in, email confirmation code sign-in through Resend, MongoDB-backed chat history, and backend-generated AI replies through an OpenAI-compatible provider such as DeepSeek.
 
+## App Demo
+
+Watch the app working here: [Eva AI Companion demo video](https://drive.google.com/file/d/1auxOkDGjLEPMesAlrH9TJuLLFtqGP_8v/view?usp=drivesdk)
+
 ## Current App
 
 - Native Android app built with Jetpack Compose and Material 3.
@@ -245,4 +249,3 @@ app/build/outputs/apk/debug/app-debug.apk
 - The Android app stores only backend-issued access/refresh tokens.
 - All third-party provider secrets belong in the backend deployment environment.
 - The backend owns Google OAuth verification, Resend email delivery, MongoDB persistence, and DeepSeek requests.
-
