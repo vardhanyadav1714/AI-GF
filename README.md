@@ -16,6 +16,7 @@ Watch the app working here: [Eva AI Companion demo video](https://drive.google.c
 - Email login/signup with one-time confirmation codes.
 - Chat history loaded from MongoDB through the backend.
 - Message send flow connected to backend conversations and assistant replies.
+- Premium subscription flow connected to backend-created Razorpay checkout.
 - Local fallback replies when backend AI is unavailable.
 - Keyboard-safe chat composer and auth form fields.
 - Eva model image used as the app launcher icon.
@@ -192,10 +193,36 @@ GET  /auth/google/start
 POST /auth/google/mobile/exchange
 GET  /auth/me
 
+GET  /subscriptions/me
+POST /subscriptions/checkout
+POST /subscriptions/sync
+
 GET  /conversations
 POST /conversations
 GET  /conversations/:conversationId/messages
 POST /conversations/:conversationId/messages
+```
+
+## Subscription Flow
+
+```mermaid
+flowchart TD
+    A[Premium screen] --> B[POST /subscriptions/checkout]
+    B --> C[Backend creates Razorpay subscription]
+    C --> D[Razorpay hosted checkout URL]
+    D --> E[Android opens browser]
+    E --> F[User authorises monthly payment]
+    F --> G[App resumes]
+    G --> H[POST /subscriptions/sync]
+    H --> I[Premium status stored in MongoDB]
+```
+
+Current Razorpay plan:
+
+```text
+plan_TRv3HKpujDyFoS
+Eva Premium Monthly
+INR 299/month
 ```
 
 ## DeepSeek Configuration

@@ -201,6 +201,15 @@ class MainActivity : ComponentActivity() {
         handleAuthIntent(intent)
     }
 
+    override fun onResume() {
+        super.onResume()
+        if (::controller.isInitialized) {
+            lifecycleScope.launch {
+                controller.refreshSubscription(silent = true)
+            }
+        }
+    }
+
     private fun openGoogleSignIn() {
         runCatching {
             val browserIntent = Intent(Intent.ACTION_VIEW, controller.googleSignInUri())
@@ -288,6 +297,29 @@ private data class VoiceSendResult(
     val audioMimeType: String
 )
 
+private data class SubscriptionPlan(
+    val planId: String,
+    val name: String,
+    val amount: Int,
+    val formattedAmount: String,
+    val currency: String,
+    val interval: String
+)
+
+private data class SubscriptionState(
+    val active: Boolean,
+    val status: String,
+    val providerSubscriptionId: String,
+    val checkoutUrl: String,
+    val plan: SubscriptionPlan,
+    val currentEnd: String?
+)
+
+private data class SubscriptionCheckout(
+    val subscription: SubscriptionState,
+    val checkoutUrl: String
+)
+
 private data class VoiceRecordingPreview(
     val audioBytes: ByteArray,
     val mimeType: String,
@@ -324,6 +356,8 @@ private class EvaAppController(context: Context) {
     var backendLive by mutableStateOf(false)
     var selectedConversationId by mutableStateOf<String?>(null)
     var chatsLoading by mutableStateOf(false)
+    var subscriptionState by mutableStateOf<SubscriptionState?>(null)
+    var subscriptionBusy by mutableStateOf(false)
 
     val messages = mutableStateListOf<ChatMessage>()
     val conversations = mutableStateListOf<ConversationPreview>()
@@ -340,6 +374,7 @@ private class EvaAppController(context: Context) {
             .onSuccess { user ->
                 authState = AuthState.SignedIn(user)
                 loadChats()
+                refreshSubscription(silent = true)
             }
             .onFailure { error ->
                 val cachedUser = api.savedUser()
@@ -356,6 +391,45 @@ private class EvaAppController(context: Context) {
                 }
             }
         authBusy = false
+    }
+
+    suspend fun refreshSubscription(silent: Boolean = false): Boolean {
+        if (authState !is AuthState.SignedIn) return false
+        if (!silent) subscriptionBusy = true
+        val refreshed = runCatching {
+            api.subscriptionStatus(sync = !silent)
+        }.onSuccess { state ->
+            subscriptionState = state
+        }.onFailure { error ->
+            if (!silent) notice = error.cleanMessage("Could not refresh subscription.")
+        }.isSuccess
+        if (!silent) subscriptionBusy = false
+        return refreshed
+    }
+
+    suspend fun startPremiumSubscription(): String? {
+        if (subscriptionBusy) return null
+        if (authState !is AuthState.SignedIn) {
+            notice = "Sign in before starting premium."
+            return null
+        }
+        subscriptionBusy = true
+        var checkoutUrl: String? = null
+        runCatching {
+            api.startSubscription()
+        }.onSuccess { checkout ->
+            subscriptionState = checkout.subscription
+            checkoutUrl = checkout.checkoutUrl.ifBlank { checkout.subscription.checkoutUrl }
+            if (checkout.subscription.active) {
+                notice = "Premium is already active."
+            } else if (checkoutUrl.isNullOrBlank()) {
+                notice = "Razorpay checkout link was not returned."
+            }
+        }.onFailure { error ->
+            notice = error.cleanMessage("Could not start subscription.")
+        }
+        subscriptionBusy = false
+        return checkoutUrl
     }
 
     suspend fun requestEmailCode(name: String, email: String): Boolean {
@@ -391,6 +465,7 @@ private class EvaAppController(context: Context) {
             authState = AuthState.SignedIn(session.user)
             notice = "Welcome back, ${session.user.name}."
             loadChats()
+            refreshSubscription(silent = true)
         }.onFailure { error ->
             notice = error.cleanMessage("That code could not be verified.")
         }
@@ -404,6 +479,7 @@ private class EvaAppController(context: Context) {
             authState = AuthState.SignedIn(session.user)
             notice = "Signed in as ${session.user.name}."
             loadChats()
+            refreshSubscription(silent = true)
         }.onFailure { error ->
             notice = error.cleanMessage("Google sign-in failed.")
         }
@@ -433,6 +509,7 @@ private class EvaAppController(context: Context) {
             authState = AuthState.SignedIn(session.user)
             notice = "Signed in as ${session.user.name}."
             loadChats()
+            refreshSubscription(silent = true)
         }.onFailure { redirectError ->
             notice = redirectError.cleanMessage("Google sign-in could not be completed.")
         }
@@ -444,6 +521,7 @@ private class EvaAppController(context: Context) {
         authState = AuthState.SignedOut
         messages.clear()
         conversations.clear()
+        subscriptionState = null
         selectedConversationId = null
         activeTab = EvaTab.Home
         premiumOpen = false
@@ -754,6 +832,29 @@ private class MeriGfApi(context: Context) {
         return parseUser(data.optJSONObject("user") ?: data).also(::saveUser)
     }
 
+    suspend fun subscriptionStatus(sync: Boolean = false): SubscriptionState {
+        val data = requestObject(
+            method = if (sync) "POST" else "GET",
+            path = if (sync) "/subscriptions/sync" else "/subscriptions/me",
+            body = if (sync) JSONObject() else null
+        )
+        return parseSubscriptionState(data)
+    }
+
+    suspend fun startSubscription(): SubscriptionCheckout {
+        val data = requestObject(
+            method = "POST",
+            path = "/subscriptions/checkout",
+            body = JSONObject()
+        )
+        val subscription = parseSubscriptionState(data.optJSONObject("subscription") ?: data)
+        val checkout = data.optJSONObject("checkout")
+        return SubscriptionCheckout(
+            subscription = subscription,
+            checkoutUrl = checkout?.bestString("checkoutUrl", "shortUrl", default = "").orEmpty()
+        )
+    }
+
     suspend fun conversations(): List<ConversationPreview> {
         val data = requestJson(method = "GET", path = "/conversations")
         val array = when (data) {
@@ -906,6 +1007,30 @@ private class MeriGfApi(context: Context) {
             name = json.bestString("name", "displayName", "preferredName", default = fallbackName),
             email = email,
             avatarUrl = json.optString("avatarUrl", "").ifBlank { null }
+        )
+    }
+
+    private fun parseSubscriptionState(json: JSONObject): SubscriptionState {
+        val planJson = json.optJSONObject("plan") ?: JSONObject()
+        val amount = planJson.optInt("amount", 29900)
+        val currency = planJson.optString("currency", "INR").ifBlank { "INR" }
+        val formattedAmount = planJson.bestString("formattedAmount", default = "")
+            .ifBlank { "$currency ${amount / 100}" }
+        val plan = SubscriptionPlan(
+            planId = planJson.bestString("planId", "id", default = "plan_TRv3HKpujDyFoS"),
+            name = planJson.bestString("name", default = "Eva Premium Monthly"),
+            amount = amount,
+            formattedAmount = formattedAmount,
+            currency = currency,
+            interval = planJson.bestString("interval", default = "monthly")
+        )
+        return SubscriptionState(
+            active = json.optBoolean("active", false),
+            status = json.optString("status", "none"),
+            providerSubscriptionId = json.bestString("providerSubscriptionId", "subscriptionId", default = ""),
+            checkoutUrl = json.bestString("checkoutUrl", default = ""),
+            plan = plan,
+            currentEnd = json.optString("currentEnd", "").ifBlank { null }
         )
     }
 
@@ -1066,6 +1191,14 @@ private fun createMediaRecorder(context: Context): MediaRecorder =
 
 @Suppress("DEPRECATION")
 private fun legacyMediaRecorder(): MediaRecorder = MediaRecorder()
+
+private fun openExternalUrl(context: Context, url: String, onFailure: () -> Unit) {
+    runCatching {
+        context.startActivity(Intent(Intent.ACTION_VIEW, Uri.parse(url)))
+    }.onFailure {
+        onFailure()
+    }
+}
 
 private fun playBase64Audio(context: Context, base64Audio: String, mimeType: String) {
     if (base64Audio.isBlank()) return
@@ -1584,6 +1717,7 @@ private fun CodeVerificationPanel(
 
 @Composable
 private fun EvaShell(controller: EvaAppController, user: EvaUser, scope: CoroutineScope) {
+    val context = LocalContext.current
     Box(Modifier.fillMaxSize()) {
         AnimatedContent(
             targetState = "${controller.activeTab}-${controller.premiumOpen}-${controller.callOpen}-${controller.lightMode}",
@@ -1596,8 +1730,24 @@ private fun EvaShell(controller: EvaAppController, user: EvaUser, scope: Corouti
                     onClose = { controller.callOpen = false }
                 )
                 controller.premiumOpen -> PremiumScreen(
+                    subscription = controller.subscriptionState,
+                    busy = controller.subscriptionBusy,
                     onBack = { controller.premiumOpen = false },
-                    onContinue = { plan -> controller.notice = "$plan selected" }
+                    onContinue = {
+                        scope.launch {
+                            val checkoutUrl = controller.startPremiumSubscription()
+                            if (!checkoutUrl.isNullOrBlank()) {
+                                openExternalUrl(
+                                    context = context,
+                                    url = checkoutUrl,
+                                    onFailure = { controller.notice = "Could not open Razorpay checkout." }
+                                )
+                            }
+                        }
+                    },
+                    onRefresh = {
+                        scope.launch { controller.refreshSubscription() }
+                    }
                 )
 
                 controller.activeTab == EvaTab.Home -> HomeScreen(
@@ -2671,13 +2821,22 @@ private fun MemoriesScreen(onOpenChat: () -> Unit) {
 }
 
 @Composable
-private fun PremiumScreen(onBack: () -> Unit, onContinue: (String) -> Unit) {
-    var selectedPlan by remember { mutableIntStateOf(1) }
-    val plans = listOf(
-        Triple("1 Month", "INR 499", ""),
-        Triple("3 Months", "INR 1,299", "SAVE 35%"),
-        Triple("12 Months", "INR 3,499", "SAVE 50%")
+private fun PremiumScreen(
+    subscription: SubscriptionState?,
+    busy: Boolean,
+    onBack: () -> Unit,
+    onContinue: () -> Unit,
+    onRefresh: () -> Unit
+) {
+    val plan = subscription?.plan ?: SubscriptionPlan(
+        planId = "plan_TRv3HKpujDyFoS",
+        name = "Eva Premium Monthly",
+        amount = 29900,
+        formattedAmount = "INR 299",
+        currency = "INR",
+        interval = "monthly"
     )
+    val active = subscription?.active == true
 
     EvaPage(backgroundImage = R.drawable.model_riya) {
         LazyColumn(
@@ -2724,32 +2883,72 @@ private fun PremiumScreen(onBack: () -> Unit, onContinue: (String) -> Unit) {
             }
             item {
                 Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                    plans.forEachIndexed { index, plan ->
-                        PriceCard(
-                            title = plan.first,
-                            price = plan.second,
-                            tag = plan.third,
-                            selected = selectedPlan == index,
-                            onClick = { selectedPlan = index },
-                            modifier = Modifier.weight(1f)
-                        )
+                    PriceCard(
+                        title = "Monthly",
+                        price = plan.formattedAmount,
+                        tag = "PLAN 299",
+                        selected = true,
+                        onClick = {},
+                        modifier = Modifier.weight(1f)
+                    )
+                    GlassCard(
+                        modifier = Modifier
+                            .weight(1f)
+                            .height(130.dp),
+                        radius = 16.dp
+                    ) {
+                        Column(
+                            modifier = Modifier.fillMaxSize(),
+                            verticalArrangement = Arrangement.Center,
+                            horizontalAlignment = Alignment.CenterHorizontally
+                        ) {
+                            Icon(
+                                if (active) Icons.Rounded.Verified else Icons.Rounded.WorkspacePremium,
+                                contentDescription = null,
+                                tint = if (active) EvaColors.Green else EvaColors.Gold,
+                                modifier = Modifier.size(30.dp)
+                            )
+                            Spacer(Modifier.height(10.dp))
+                            Text(
+                                if (active) "Active" else "Ready",
+                                fontWeight = FontWeight.Black,
+                                fontSize = 17.sp
+                            )
+                            Spacer(Modifier.height(6.dp))
+                            Text(
+                                subscription?.status?.replaceFirstChar {
+                                    if (it.isLowerCase()) it.titlecase(Locale.getDefault()) else it.toString()
+                                } ?: "Not subscribed",
+                                color = evaMuted(),
+                                fontSize = 12.sp,
+                                fontWeight = FontWeight.Bold,
+                                textAlign = TextAlign.Center
+                            )
+                        }
                     }
                 }
             }
             item {
                 GradientButton(
                     icon = Icons.Rounded.LockOpen,
-                    label = "Continue",
-                    onClick = { onContinue(plans[selectedPlan].first) }
+                    label = when {
+                        active -> "Premium Active"
+                        busy -> "Opening Checkout"
+                        else -> "Continue ${plan.formattedAmount}"
+                    },
+                    enabled = !busy && !active,
+                    onClick = onContinue
                 )
             }
             item {
                 Text(
-                    "Restore Purchase",
+                    if (busy) "Checking subscription..." else "Refresh Subscription Status",
                     color = EvaColors.Pink.copy(alpha = 0.9f),
                     fontWeight = FontWeight.ExtraBold,
                     textAlign = TextAlign.Center,
-                    modifier = Modifier.fillMaxWidth()
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .clickable(enabled = !busy, onClick = onRefresh)
                 )
             }
         }
@@ -2820,7 +3019,10 @@ private fun ProfileScreen(controller: EvaAppController, user: EvaUser) {
                                 modifier = Modifier.size(20.dp)
                             )
                             Spacer(Modifier.width(8.dp))
-                            Text("Premium Member", fontWeight = FontWeight.Black)
+                            Text(
+                                if (controller.subscriptionState?.active == true) "Premium Member" else "Go Premium",
+                                fontWeight = FontWeight.Black
+                            )
                         }
                     }
                 }
