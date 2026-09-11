@@ -122,15 +122,27 @@ class MainActivity : ComponentActivity() {
     private fun openGoogleSignIn() {
         controller.authBusy = true
         runCatching {
+            val webClientId = googleWebClientId()
+            if (webClientId.isBlank()) {
+                controller.authBusy = false
+                controller.notice = "Google sign-in needs the Web OAuth client ID in Firebase."
+                return
+            }
             val options = GoogleSignInOptions.Builder(GoogleSignInOptions.DEFAULT_SIGN_IN)
                 .requestEmail()
-                .requestIdToken(getString(R.string.default_web_client_id))
+                .requestIdToken(webClientId)
                 .build()
             googleSignInLauncher.launch(GoogleSignIn.getClient(this, options).signInIntent)
         }.onFailure {
             controller.authBusy = false
             controller.notice = "Google sign-in failed."
         }
+    }
+
+    private fun googleWebClientId(): String {
+        val resourceId = resources.getIdentifier("default_web_client_id", "string", packageName)
+        if (resourceId == 0) return ""
+        return getString(resourceId)
     }
 
     private fun handleAuthIntent(intent: Intent?) {
