@@ -89,7 +89,6 @@ fun HomeScreen(
     companion: CompanionProfile,
     onCompanionSelect: (CompanionProfile) -> Unit,
     onChat: () -> Unit,
-    onCall: () -> Unit,
     onPremium: () -> Unit,
     onQuickMessage: (String) -> Unit,
     onVoiceNotes: () -> Unit
@@ -104,7 +103,12 @@ fun HomeScreen(
         ) {
             item {
                 Row(verticalAlignment = Alignment.CenterVertically) {
-                    IconGlassButton(icon = Icons.Rounded.Menu, onClick = {}, size = 44.dp)
+                    Text(
+                        "Eva",
+                        color = evaText(),
+                        fontSize = 19.sp,
+                        fontWeight = FontWeight.Black
+                    )
                     Spacer(Modifier.weight(1f))
                     IconGlassButton(
                         icon = Icons.Rounded.WorkspacePremium,
@@ -148,16 +152,10 @@ fun HomeScreen(
                 HeroImageCard(companion, onChat)
             }
             item {
-                Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                    HomeAction(
-                        icon = Icons.Rounded.PhoneInTalk,
-                        label = "Call",
-                        onClick = onCall,
-                        modifier = Modifier.weight(1f)
-                    )
+                Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
                     HomeAction(
                         icon = Icons.Rounded.GraphicEq,
-                        label = "Voice",
+                        label = "Voice chat",
                         onClick = onVoiceNotes,
                         modifier = Modifier.weight(1f)
                     )

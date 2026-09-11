@@ -417,12 +417,12 @@ fun PriceCard(
 }
 
 @Composable
-fun StatStrip(chats: String, memories: String, days: String) {
+fun StatStrip(chats: String, plan: String, companion: String) {
     GlassCard {
         Row {
             StatItem("Chats", chats, Modifier.weight(1f))
-            StatItem("Memories", memories, Modifier.weight(1f))
-            StatItem("Days Together", days, Modifier.weight(1f))
+            StatItem("Plan", plan, Modifier.weight(1f))
+            StatItem("Companion", companion, Modifier.weight(1f))
         }
     }
 }
@@ -432,7 +432,13 @@ fun StatItem(label: String, value: String, modifier: Modifier = Modifier) {
     Column(modifier = modifier, horizontalAlignment = Alignment.CenterHorizontally) {
         Text(label, color = evaMuted(), fontSize = 12.sp, maxLines = 1)
         Spacer(Modifier.height(7.dp))
-        Text(value, fontSize = 23.sp, fontWeight = FontWeight.Black)
+        Text(
+            value,
+            fontSize = if (value.length > 7) 16.sp else 23.sp,
+            fontWeight = FontWeight.Black,
+            maxLines = 1,
+            overflow = TextOverflow.Ellipsis
+        )
     }
 }
 

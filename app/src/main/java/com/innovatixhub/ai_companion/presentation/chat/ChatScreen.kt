@@ -37,6 +37,7 @@ import androidx.compose.ui.graphics.toArgb
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.LocalFocusManager
 import androidx.compose.ui.platform.LocalView
 import androidx.compose.ui.res.painterResource
@@ -85,8 +86,10 @@ import kotlin.math.max
 fun ChatScreen(controller: EvaAppController, scope: CoroutineScope) {
     val focusManager = LocalFocusManager.current
     val context = LocalContext.current
+    val density = LocalDensity.current
     val companion = controller.selectedCompanion
     val listState = rememberLazyListState()
+    val imeBottom = WindowInsets.ime.getBottom(density)
     val recorder = remember(context) { EvaAudioRecorder(context) }
     var recording by remember { mutableStateOf(false) }
     var recordingStartedAt by remember { mutableStateOf(0L) }
@@ -168,7 +171,8 @@ fun ChatScreen(controller: EvaAppController, scope: CoroutineScope) {
         controller.sending,
         recording,
         voicePreview != null,
-        composerFocused
+        composerFocused,
+        imeBottom
     ) {
         if (chatMessages.isEmpty()) return@LaunchedEffect
 
@@ -199,7 +203,6 @@ fun ChatScreen(controller: EvaAppController, scope: CoroutineScope) {
                 companion = companion,
                 live = controller.backendLive,
                 onBack = { controller.activeTab = EvaTab.Home },
-                onCall = { controller.callOpen = true },
                 onReport = {
                     scope.launch {
                         controller.reportLastAssistantReply()
@@ -267,7 +270,6 @@ fun ChatScreen(controller: EvaAppController, scope: CoroutineScope) {
                     focusManager.clearFocus()
                     scope.launch { controller.sendMessage() }
                 },
-                onAttachment = controller::sendAttachment,
                 onVoiceRecord = {
                     if (recording) finishRecording() else startRecording()
                 },
@@ -288,7 +290,6 @@ fun ChatHeader(
     companion: CompanionProfile,
     live: Boolean,
     onBack: () -> Unit,
-    onCall: () -> Unit,
     onReport: () -> Unit
 ) {
     var menuOpen by remember { mutableStateOf(false) }
@@ -333,8 +334,6 @@ fun ChatHeader(
                 )
             }
         }
-        IconGlassButton(icon = Icons.Rounded.Call, onClick = onCall, size = 42.dp)
-        Spacer(Modifier.width(6.dp))
         Box {
             IconGlassButton(
                 icon = Icons.Rounded.MoreVert,
@@ -435,21 +434,6 @@ fun MessageBubble(
                         canPlay = message.audioBase64.isNotBlank(),
                         onPlay = { onPlayAudio(message) }
                     )
-
-                    MessageKind.Attachment -> Row(verticalAlignment = Alignment.CenterVertically) {
-                        Icon(
-                            Icons.Rounded.AttachFile,
-                            contentDescription = null,
-                            tint = bubbleTextColor,
-                            modifier = Modifier.size(18.dp)
-                        )
-                        Spacer(Modifier.width(7.dp))
-                        Text(
-                            message.text,
-                            color = bubbleTextColor,
-                            fontWeight = FontWeight.ExtraBold
-                        )
-                    }
 
                     MessageKind.Text -> Text(
                         text = if (message.text.isBlank()) "Typing..." else message.text,
@@ -574,13 +558,11 @@ fun ChatComposer(
     onDraftChange: (String) -> Unit,
     onInputFocusChange: (Boolean) -> Unit,
     onSend: () -> Unit,
-    onAttachment: (String) -> Unit,
     onVoiceRecord: () -> Unit,
     onVoiceReplay: () -> Unit,
     onVoiceDelete: () -> Unit,
     onVoiceSend: () -> Unit
 ) {
-    var attachmentPickerOpen by remember { mutableStateOf(false) }
     var emojiPickerOpen by remember { mutableStateOf(false) }
 
     Column(
@@ -605,14 +587,6 @@ fun ChatComposer(
                 onPick = { emoji ->
                     onDraftChange(draft + emoji)
                     emojiPickerOpen = false
-                }
-            )
-        }
-        AnimatedVisibility(visible = attachmentPickerOpen) {
-            AttachmentStrip(
-                onPicked = {
-                    onAttachment(it)
-                    attachmentPickerOpen = false
                 }
             )
         }
@@ -666,9 +640,6 @@ fun ChatComposer(
                             unfocusedIndicatorColor = Color.Transparent
                         )
                     )
-                    IconButton(onClick = { attachmentPickerOpen = !attachmentPickerOpen }) {
-                        Icon(Icons.Rounded.AttachFile, contentDescription = "Attach", tint = evaMuted())
-                    }
                     Box(
                         modifier = Modifier
                             .size(54.dp)
@@ -832,41 +803,6 @@ fun PickerStrip(items: List<String>, onPick: (String) -> Unit) {
             ) {
                 Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
                     Text(item, fontSize = 25.sp)
-                }
-            }
-        }
-    }
-}
-
-@Composable
-fun AttachmentStrip(onPicked: (String) -> Unit) {
-    val items = listOf(
-        "Photo" to Icons.Rounded.Photo,
-        "Camera" to Icons.Rounded.CameraAlt,
-        "File" to Icons.Rounded.InsertDriveFile,
-        "Location" to Icons.Rounded.LocationOn
-    )
-    Row(
-        modifier = Modifier.padding(bottom = 8.dp),
-        horizontalArrangement = Arrangement.spacedBy(8.dp)
-    ) {
-        items.forEach { (label, icon) ->
-            GlassCard(
-                modifier = Modifier
-                    .weight(1f)
-                    .height(78.dp)
-                    .clickable { onPicked(label) },
-                padding = PaddingValues(8.dp),
-                radius = 18.dp
-            ) {
-                Column(
-                    horizontalAlignment = Alignment.CenterHorizontally,
-                    verticalArrangement = Arrangement.Center,
-                    modifier = Modifier.fillMaxSize()
-                ) {
-                    Icon(icon, contentDescription = label, tint = EvaColors.Pink)
-                    Spacer(Modifier.height(5.dp))
-                    Text(label, fontSize = 11.sp, fontWeight = FontWeight.Black)
                 }
             }
         }

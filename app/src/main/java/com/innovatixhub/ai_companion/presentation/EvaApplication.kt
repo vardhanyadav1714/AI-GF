@@ -203,7 +203,6 @@ fun EvaShell(controller: EvaAppController, user: EvaUser, scope: CoroutineScope)
                     companion = controller.selectedCompanion,
                     onCompanionSelect = controller::selectCompanion,
                     onChat = { controller.activeTab = EvaTab.Chat },
-                    onCall = { controller.callOpen = true },
                     onPremium = { controller.premiumOpen = true },
                     onQuickMessage = { text ->
                         scope.launch { controller.sendMessage(text) }

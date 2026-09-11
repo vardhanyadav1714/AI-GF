@@ -137,7 +137,7 @@ fun PremiumScreen(
                 ) {
                     Column {
                         PremiumFeature(Icons.Rounded.Chat, "Unlimited Chats", "Talk as much as you want")
-                        PremiumFeature(Icons.Rounded.Call, "Voice & Video Calls", "Call Eva anytime")
+                        PremiumFeature(Icons.Rounded.GraphicEq, "Voice Notes", "Send voice and hear audio replies")
                         PremiumFeature(Icons.Rounded.Star, "Custom Personality", "Make Eva your way")
                         PremiumFeature(Icons.Rounded.Favorite, "Memory & Moments", "Save every special moment")
                         PremiumFeature(Icons.Rounded.LockOpen, "No Ads", "Enjoy a clean experience")

@@ -305,8 +305,8 @@ fun ProfileScreen(controller: EvaAppController, user: EvaUser) {
             item {
                 StatStrip(
                     chats = max(1, controller.messages.count { it.fromUser }).toString(),
-                    memories = "24",
-                    days = "45"
+                    plan = if (controller.subscriptionState?.active == true) "Premium" else "Free",
+                    companion = companion.name
                 )
             }
             item {

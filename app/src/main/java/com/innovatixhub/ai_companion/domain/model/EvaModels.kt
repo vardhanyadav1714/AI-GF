@@ -6,7 +6,7 @@ enum class EvaTab { Home, Chat, Profile }
 
 enum class AuthMode { Login, Signup }
 
-enum class MessageKind { Text, Voice, Attachment }
+enum class MessageKind { Text, Voice }
 
 sealed interface AuthState {
     data object Loading : AuthState

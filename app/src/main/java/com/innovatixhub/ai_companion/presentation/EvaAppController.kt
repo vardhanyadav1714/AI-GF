@@ -177,8 +177,6 @@ class EvaAppController @Inject constructor(
         }
     }
 
-    fun googleSignInUri(): Uri = api.googleSignInUri()
-
     suspend fun acceptAuthRedirect(uri: Uri) {
         authBusy = true
         val error = uri.getQueryParameter("error")
@@ -302,23 +300,6 @@ class EvaAppController @Inject constructor(
             streamLocalReply(cleanText, placeholderIndex)
         }
         sending = false
-    }
-
-    fun sendAttachment(label: String) {
-        activeTab = EvaTab.Chat
-        messages.add(
-            ChatMessage(
-                text = "[$label]",
-                fromUser = true,
-                kind = MessageKind.Attachment
-            )
-        )
-        messages.add(
-            ChatMessage(
-                text = "I received your $label. Tell me what you want to do with it.",
-                fromUser = false
-            )
-        )
     }
 
     suspend fun reportLastAssistantReply() {
