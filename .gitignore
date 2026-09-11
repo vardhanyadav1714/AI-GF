@@ -16,4 +16,10 @@
 .externalNativeBuild
 .cxx
 local.properties
+app/google-services.json
 *.apk
+*.aab
+app/release/
+*.jks
+*.keystore
+eva

@@ -1,4 +1,4 @@
-package com.innovatixhub.ai_companion
+package com.eva.ai
 
 import androidx.test.platform.app.InstrumentationRegistry
 import androidx.test.ext.junit.runners.AndroidJUnit4
@@ -19,6 +19,6 @@ class ExampleInstrumentedTest {
     fun useAppContext() {
         // Context of the app under test.
         val appContext = InstrumentationRegistry.getInstrumentation().targetContext
-        assertEquals("com.innovatixhub.ai_companion", appContext.packageName)
+        assertEquals("com.eva.ai", appContext.packageName)
     }
 }

@@ -1,4 +1,4 @@
-package com.innovatixhub.ai_companion
+package com.eva.ai
 
 import org.junit.Test
 

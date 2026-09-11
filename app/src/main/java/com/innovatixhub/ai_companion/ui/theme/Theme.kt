@@ -1,4 +1,4 @@
-package com.innovatixhub.ai_companion.ui.theme
+package com.eva.ai.ui.theme
 
 import android.app.Activity
 import android.os.Build

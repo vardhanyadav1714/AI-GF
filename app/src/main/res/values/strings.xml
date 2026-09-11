@@ -1,4 +1,6 @@
 <resources>
     <string name="app_name">Eva</string>
     <string name="backend_base_url">https://api.merigf.com/api/v1</string>
+    <string name="eva_notifications_channel_id">eva_replies</string>
+    <string name="eva_notifications_channel_name">Eva replies</string>
 </resources>

@@ -1,4 +1,4 @@
-package com.innovatixhub.ai_companion.ui.theme
+package com.eva.ai.ui.theme
 
 import androidx.compose.material3.Typography
 import androidx.compose.ui.text.TextStyle
