@@ -1,6 +1,7 @@
 package com.eva.ai.data.remote
 
 import android.content.Context
+import android.net.Uri
 import android.util.Base64
 import com.eva.ai.R
 import com.eva.ai.domain.model.AuthSession
@@ -54,6 +55,12 @@ class MeriGfApi @Inject constructor(
 
     fun clearSession() {
         prefs.edit().clear().apply()
+    }
+
+    fun googleSignInUri(): Uri {
+        val redirectUri = "ai-companion://auth/google"
+        val encodedRedirect = URLEncoder.encode(redirectUri, Charsets.UTF_8.name())
+        return Uri.parse("$baseUrl/auth/google/start?redirectUri=$encodedRedirect")
     }
 
     suspend fun exchangeGoogleCode(code: String): AuthSession {

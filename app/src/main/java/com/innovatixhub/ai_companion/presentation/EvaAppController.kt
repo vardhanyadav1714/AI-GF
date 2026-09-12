@@ -177,6 +177,8 @@ class EvaAppController @Inject constructor(
         }
     }
 
+    fun googleSignInUri(): Uri = api.googleSignInUri()
+
     suspend fun acceptAuthRedirect(uri: Uri) {
         authBusy = true
         val error = uri.getQueryParameter("error")

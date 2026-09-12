@@ -57,7 +57,6 @@ dependencies {
     implementation(libs.androidx.core.ktx)
     implementation(libs.androidx.lifecycle.runtime.ktx)
     implementation(libs.firebase.messaging)
-    implementation(libs.play.services.auth)
     implementation(libs.hilt.android)
     add("ksp", libs.hilt.compiler)
     add("ksp", "com.squareup:kotlinpoet:1.13.2")
