@@ -40,7 +40,6 @@ class EvaAppController @Inject constructor(
     var premiumOpen by mutableStateOf(false)
     var callOpen by mutableStateOf(false)
     var lightMode by mutableStateOf(false)
-    var relationship by mutableStateOf("Sweetheart")
     var draft by mutableStateOf("")
     var sending by mutableStateOf(false)
     var backendLive by mutableStateOf(false)

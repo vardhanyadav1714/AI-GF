@@ -193,12 +193,20 @@ fun ProfileScreen(controller: EvaAppController, user: EvaUser) {
 
     EvaPage {
         LazyColumn(
-            modifier = Modifier.fillMaxSize(),
+            modifier = Modifier
+                .fillMaxSize()
+                .statusBarsPadding(),
             contentPadding = PaddingValues(16.dp, 16.dp, 16.dp, 108.dp),
             verticalArrangement = Arrangement.spacedBy(16.dp)
         ) {
             item {
                 Row(verticalAlignment = Alignment.CenterVertically) {
+                    Text(
+                        "Profile",
+                        color = evaText(),
+                        fontSize = 26.sp,
+                        fontWeight = FontWeight.Black
+                    )
                     Spacer(Modifier.weight(1f))
                     IconGlassButton(
                         icon = if (controller.lightMode) Icons.Rounded.LightMode else Icons.Rounded.DarkMode,
@@ -304,7 +312,7 @@ fun ProfileScreen(controller: EvaAppController, user: EvaUser) {
             }
             item {
                 StatStrip(
-                    chats = max(1, controller.messages.count { it.fromUser }).toString(),
+                    chats = controller.messages.count { it.fromUser }.toString(),
                     plan = if (controller.subscriptionState?.active == true) "Premium" else "Free",
                     companion = companion.name
                 )
@@ -327,19 +335,9 @@ fun ProfileScreen(controller: EvaAppController, user: EvaUser) {
                         )
                         Spacer(Modifier.height(12.dp))
                         ProfileRow(Icons.Rounded.Favorite, "Character vibe", companion.personality)
-                        ProfileRow(Icons.Rounded.GraphicEq, "Voice & Style", companion.voiceStyle) {
-                            controller.activeTab = EvaTab.Chat
-                        }
-                        ProfileRow(Icons.Rounded.Star, "Interests", companion.interests) {
-                            controller.activeTab = EvaTab.Chat
-                        }
-                        ProfileRow(Icons.Rounded.LocationOn, "Born in", "${companion.bornIn} / ${companion.age}") {
-                            controller.activeTab = EvaTab.Chat
-                        }
-                        ProfileRow(Icons.Rounded.VolunteerActivism, "Relationship Level", controller.relationship) {
-                            controller.relationship =
-                                if (controller.relationship == "Sweetheart") "Soulmate" else "Sweetheart"
-                        }
+                        ProfileRow(Icons.Rounded.GraphicEq, "Voice & Style", companion.voiceStyle)
+                        ProfileRow(Icons.Rounded.Star, "Interests", companion.interests)
+                        ProfileRow(Icons.Rounded.LocationOn, "Born in", "${companion.bornIn} / ${companion.age}")
                         Row(
                             modifier = Modifier
                                 .fillMaxWidth()
@@ -358,7 +356,7 @@ fun ProfileScreen(controller: EvaAppController, user: EvaUser) {
                                 onCheckedChange = { controller.lightMode = it }
                             )
                         }
-                        ProfileRow(Icons.Rounded.PersonOutline, "Signed in as", user.email.ifBlank { "Demo" }) {}
+                        ProfileRow(Icons.Rounded.PersonOutline, "Signed in as", user.email.ifBlank { "Email unavailable" })
                         TextButton(
                             onClick = controller::signOut,
                             modifier = Modifier.fillMaxWidth()

@@ -320,7 +320,7 @@ fun ChatHeader(
             Text(companion.name, fontSize = 21.sp, fontWeight = FontWeight.Black)
             Row(verticalAlignment = Alignment.CenterVertically) {
                 Text(
-                    if (live) "Live" else "Demo",
+                    if (live) "Live" else "Connecting",
                     color = evaMuted(),
                     fontSize = 12.sp,
                     fontWeight = FontWeight.Bold

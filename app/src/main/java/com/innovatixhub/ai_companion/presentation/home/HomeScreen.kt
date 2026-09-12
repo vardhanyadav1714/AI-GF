@@ -155,7 +155,7 @@ fun HomeScreen(
                 Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
                     HomeAction(
                         icon = Icons.Rounded.GraphicEq,
-                        label = "Voice chat",
+                        label = "Voice call",
                         onClick = onVoiceNotes,
                         modifier = Modifier.weight(1f)
                     )

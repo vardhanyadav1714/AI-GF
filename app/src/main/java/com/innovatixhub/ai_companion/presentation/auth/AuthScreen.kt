@@ -200,7 +200,7 @@ fun AuthScreen(
                         )
 
                         GoogleAuthButton(
-                            label = if (busy) "Opening Google..." else "Continue with Google",
+                            label = if (busy) "Signing in..." else "Continue with Google",
                             enabled = !busy,
                             onClick = onGoogleSignIn
                         )
@@ -247,7 +247,7 @@ fun AuthScreen(
                         }
 
                         Text(
-                            text = "Your account is protected with one-time email codes.",
+                            text = "Email login uses a one-time code.",
                             color = evaMuted(),
                             fontSize = 12.sp,
                             lineHeight = 17.sp,
@@ -292,7 +292,7 @@ fun AuthModeToggle(
                 contentAlignment = Alignment.Center
             ) {
                 Text(
-                    text = if (item == AuthMode.Login) "Login" else "Sign up",
+                    text = if (item == AuthMode.Login) "Sign in" else "Sign up",
                     color = if (selected) Color.White else evaMuted(),
                     fontWeight = FontWeight.Black,
                     fontSize = 14.sp
@@ -325,15 +325,11 @@ fun GoogleAuthButton(
             verticalAlignment = Alignment.CenterVertically,
             horizontalArrangement = Arrangement.Center
         ) {
-            Box(
-                modifier = Modifier
-                    .size(30.dp)
-                    .clip(CircleShape)
-                    .background(if (isEvaLight()) Color(0xFFF7F3F8) else Color.Black.copy(alpha = 0.22f)),
-                contentAlignment = Alignment.Center
-            ) {
-                Text("G", color = EvaColors.Pink, fontWeight = FontWeight.Black)
-            }
+            Image(
+                painter = painterResource(R.drawable.ic_google_g),
+                contentDescription = null,
+                modifier = Modifier.size(22.dp)
+            )
             Spacer(Modifier.width(10.dp))
             Text(
                 text = label,

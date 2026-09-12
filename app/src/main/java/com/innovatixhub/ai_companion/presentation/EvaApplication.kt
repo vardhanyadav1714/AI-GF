@@ -207,7 +207,7 @@ fun EvaShell(controller: EvaAppController, user: EvaUser, scope: CoroutineScope)
                     onQuickMessage = { text ->
                         scope.launch { controller.sendMessage(text) }
                     },
-                    onVoiceNotes = { controller.activeTab = EvaTab.Chat }
+                    onVoiceNotes = { controller.callOpen = true }
                 )
 
                 controller.activeTab == EvaTab.Chat -> ChatScreen(controller, scope)
