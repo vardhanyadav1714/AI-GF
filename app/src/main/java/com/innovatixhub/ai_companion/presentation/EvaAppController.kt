@@ -165,6 +165,7 @@ class EvaAppController @Inject constructor(
     }
 
     suspend fun signInWithGoogle(idToken: String) {
+        authBusy = true
         runCatching {
             api.signInWithGoogle(idToken)
         }.onSuccess { session ->
@@ -175,6 +176,7 @@ class EvaAppController @Inject constructor(
         }.onFailure { error ->
             notice = error.cleanMessage("Google sign-in failed.")
         }
+        authBusy = false
     }
 
     fun googleSignInUri(): Uri = api.googleSignInUri()
