@@ -176,7 +176,7 @@ fun PersonalityModeChip(
 }
 
 @Composable
-fun ProfileScreen(controller: EvaAppController, user: EvaUser) {
+fun ProfileScreen(controller: EvaAppController, user: EvaUser, scope: CoroutineScope) {
     val companion = controller.selectedCompanion
     val displayName = user.name.ifBlank {
         user.email.substringBefore("@").replaceFirstChar {
@@ -358,7 +358,7 @@ fun ProfileScreen(controller: EvaAppController, user: EvaUser) {
                         }
                         ProfileRow(Icons.Rounded.PersonOutline, "Signed in as", user.email.ifBlank { "Email unavailable" })
                         TextButton(
-                            onClick = controller::signOut,
+                            onClick = { scope.launch { controller.signOut() } },
                             modifier = Modifier.fillMaxWidth()
                         ) {
                             Text("Sign out", color = EvaColors.Coral, fontWeight = FontWeight.Bold)

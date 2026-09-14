@@ -213,7 +213,8 @@ fun EvaShell(controller: EvaAppController, user: EvaUser, scope: CoroutineScope)
                 controller.activeTab == EvaTab.Chat -> ChatScreen(controller, scope)
                 controller.activeTab == EvaTab.Profile -> ProfileScreen(
                     controller = controller,
-                    user = user
+                    user = user,
+                    scope = scope
                 )
             }
         }

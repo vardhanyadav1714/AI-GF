@@ -51,6 +51,7 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.core.content.ContextCompat
 import androidx.core.view.WindowInsetsControllerCompat
+import com.eva.ai.EvaNotificationCenter
 import com.eva.ai.R
 import com.eva.ai.data.audio.*
 import com.eva.ai.data.remote.*
@@ -96,7 +97,27 @@ fun ChatScreen(controller: EvaAppController, scope: CoroutineScope) {
     var recordingSeconds by remember { mutableIntStateOf(0) }
     var voicePreview by remember { mutableStateOf<VoiceRecordingPreview?>(null) }
     var composerFocused by remember { mutableStateOf(false) }
+
+    DisposableEffect(controller.selectedConversationId) {
+        EvaNotificationCenter.setActiveConversation(controller.selectedConversationId)
+        val eventJob = scope.launch {
+            EvaNotificationCenter.openConversations().collect {
+                controller.reloadCurrentConversation()
+            }
+        }
+        onDispose {
+            EvaNotificationCenter.setActiveConversation(null)
+            eventJob.cancel()
+        }
+    }
+
     val chatMessages = controller.messages.toList()
+    val keyboardVisible = imeBottom > 0
+    val tailSpace = when {
+        voicePreview != null || recording -> 30.dp
+        keyboardVisible || composerFocused -> 44.dp
+        else -> 14.dp
+    }
     val chatListItemCount = (if (controller.chatsLoading) 1 else 0) +
         chatMessages.size +
         chatMessages.dateGroupCount() +
@@ -203,6 +224,7 @@ fun ChatScreen(controller: EvaAppController, scope: CoroutineScope) {
                 companion = companion,
                 live = controller.backendLive,
                 onBack = { controller.activeTab = EvaTab.Home },
+                onCall = { controller.callOpen = true },
                 onReport = {
                     scope.launch {
                         controller.reportLastAssistantReply()
@@ -212,8 +234,8 @@ fun ChatScreen(controller: EvaAppController, scope: CoroutineScope) {
             LazyColumn(
                 modifier = Modifier.weight(1f),
                 state = listState,
-                contentPadding = PaddingValues(18.dp, 18.dp, 18.dp, 24.dp),
-                verticalArrangement = Arrangement.spacedBy(14.dp)
+                contentPadding = PaddingValues(start = 16.dp, top = 10.dp, end = 16.dp, bottom = 8.dp),
+                verticalArrangement = Arrangement.spacedBy(12.dp)
             ) {
                 if (controller.chatsLoading) {
                     item(key = "messages-loading") {
@@ -255,7 +277,7 @@ fun ChatScreen(controller: EvaAppController, scope: CoroutineScope) {
                     }
                 }
                 item(key = "chat-tail-space") {
-                    Spacer(Modifier.height(2.dp))
+                    Spacer(Modifier.height(tailSpace))
                 }
             }
             ChatComposer(
@@ -290,6 +312,7 @@ fun ChatHeader(
     companion: CompanionProfile,
     live: Boolean,
     onBack: () -> Unit,
+    onCall: () -> Unit,
     onReport: () -> Unit
 ) {
     var menuOpen by remember { mutableStateOf(false) }
@@ -298,7 +321,7 @@ fun ChatHeader(
         modifier = Modifier
             .fillMaxWidth()
             .statusBarsPadding()
-            .padding(start = 12.dp, top = 6.dp, end = 12.dp, bottom = 8.dp),
+            .padding(start = 14.dp, top = 8.dp, end = 14.dp, bottom = 6.dp),
         verticalAlignment = Alignment.CenterVertically
     ) {
         IconGlassButton(
@@ -312,7 +335,7 @@ fun ChatHeader(
             contentDescription = null,
             contentScale = ContentScale.Crop,
             modifier = Modifier
-                .size(44.dp)
+                .size(42.dp)
                 .clip(CircleShape)
         )
         Spacer(Modifier.width(9.dp))
@@ -334,6 +357,12 @@ fun ChatHeader(
                 )
             }
         }
+        IconGlassButton(
+            icon = Icons.Rounded.Call,
+            onClick = onCall,
+            size = 42.dp
+        )
+        Spacer(Modifier.width(8.dp))
         Box {
             IconGlassButton(
                 icon = Icons.Rounded.MoreVert,
@@ -373,8 +402,20 @@ fun MessageBubble(
     val quietBubbleColor = if (isEvaLight()) {
         Color.White.copy(alpha = 0.78f)
     } else {
-        Color.White.copy(alpha = 0.08f)
+        Color(0xFF1D1821).copy(alpha = 0.92f)
     }
+    val assistantShape = RoundedCornerShape(
+        topStart = 18.dp,
+        topEnd = 18.dp,
+        bottomStart = 5.dp,
+        bottomEnd = 18.dp
+    )
+    val userShape = RoundedCornerShape(
+        topStart = 18.dp,
+        topEnd = 18.dp,
+        bottomStart = 18.dp,
+        bottomEnd = 5.dp
+    )
 
     Row(
         modifier = Modifier.fillMaxWidth(),
@@ -392,65 +433,46 @@ fun MessageBubble(
             )
             Spacer(Modifier.width(8.dp))
         }
-        Box(
-            modifier = Modifier.fillMaxWidth(if (fromUser) 0.78f else 0.84f),
-            contentAlignment = if (fromUser) Alignment.CenterEnd else Alignment.CenterStart
+        Column(
+            modifier = Modifier
+                .widthIn(max = if (fromUser) 296.dp else 284.dp)
+                .clip(if (fromUser) userShape else assistantShape)
+                .then(
+                    if (fromUser) {
+                        Modifier.background(EvaColors.Gradient)
+                    } else {
+                        Modifier
+                            .background(quietBubbleColor)
+                            .border(BorderStroke(1.dp, evaBorder()), assistantShape)
+                    }
+                )
+                .padding(start = 15.dp, top = 12.dp, end = 15.dp, bottom = 10.dp),
+            horizontalAlignment = Alignment.End
         ) {
-            Column(
-                modifier = Modifier
-                    .clip(
-                        RoundedCornerShape(
-                            topStart = 18.dp,
-                            topEnd = 18.dp,
-                            bottomStart = if (fromUser) 18.dp else 5.dp,
-                            bottomEnd = if (fromUser) 5.dp else 18.dp
-                        )
-                    )
-                    .then(
-                        if (fromUser) {
-                            Modifier.background(EvaColors.Gradient)
-                        } else {
-                            Modifier
-                                .background(quietBubbleColor)
-                                .border(
-                                    BorderStroke(1.dp, evaBorder()),
-                                    RoundedCornerShape(
-                                        topStart = 18.dp,
-                                        topEnd = 18.dp,
-                                        bottomStart = 5.dp,
-                                        bottomEnd = 18.dp
-                                    )
-                                )
-                        }
-                    )
-                    .padding(start = 16.dp, top = 13.dp, end = 16.dp, bottom = 12.dp),
-                horizontalAlignment = Alignment.End
-            ) {
-                when (message.kind) {
-                    MessageKind.Voice -> VoiceNoteBubble(
-                        seconds = message.voiceSeconds,
-                        fromUser = fromUser,
-                        companionName = companion.name,
-                        canPlay = message.audioBase64.isNotBlank(),
-                        onPlay = { onPlayAudio(message) }
-                    )
+            when (message.kind) {
+                MessageKind.Voice -> VoiceNoteBubble(
+                    seconds = message.voiceSeconds,
+                    fromUser = fromUser,
+                    companionName = companion.name,
+                    canPlay = message.audioBase64.isNotBlank(),
+                    onPlay = { onPlayAudio(message) }
+                )
 
-                    MessageKind.Text -> Text(
-                        text = if (message.text.isBlank()) "Typing..." else message.text,
-                        color = if (message.text.isBlank()) evaMuted() else bubbleTextColor,
-                        fontSize = 16.sp,
-                        lineHeight = 21.sp,
-                        fontWeight = if (fromUser) FontWeight.Bold else FontWeight.Medium
-                    )
-                }
-                Spacer(Modifier.height(6.dp))
-                Text(
-                    formatTime(message.createdAtMillis),
-                    color = if (fromUser) Color.White.copy(alpha = 0.62f) else evaMuted(),
-                    fontSize = 12.sp,
-                    fontWeight = FontWeight.Bold
+                MessageKind.Text -> Text(
+                    text = if (message.text.isBlank()) "Typing..." else message.text,
+                    color = if (message.text.isBlank()) evaMuted() else bubbleTextColor,
+                    fontSize = 14.5.sp,
+                    lineHeight = 20.sp,
+                    fontWeight = if (fromUser) FontWeight.SemiBold else FontWeight.Normal
                 )
             }
+            Spacer(Modifier.height(5.dp))
+            Text(
+                formatTime(message.createdAtMillis),
+                color = if (fromUser) Color.White.copy(alpha = 0.64f) else evaMuted().copy(alpha = 0.76f),
+                fontSize = 11.sp,
+                fontWeight = FontWeight.Bold
+            )
         }
     }
 }
@@ -564,13 +586,15 @@ fun ChatComposer(
     onVoiceSend: () -> Unit
 ) {
     var emojiPickerOpen by remember { mutableStateOf(false) }
+    val bringIntoViewRequester = remember { BringIntoViewRequester() }
+    val composerScope = rememberCoroutineScope()
 
     Column(
         modifier = Modifier
             .animateContentSize()
             .imePadding()
             .navigationBarsPadding()
-            .padding(start = 14.dp, top = 6.dp, end = 14.dp, bottom = 10.dp)
+            .padding(start = 14.dp, top = 4.dp, end = 14.dp, bottom = 8.dp)
     ) {
         AnimatedVisibility(visible = emojiPickerOpen) {
             PickerStrip(
@@ -591,7 +615,10 @@ fun ChatComposer(
             )
         }
         GlassCard(
-            padding = PaddingValues(start = 8.dp, top = 4.dp, end = 8.dp, bottom = 4.dp)
+            padding = PaddingValues(start = 6.dp, top = 3.dp, end = 6.dp, bottom = 3.dp),
+            radius = 26.dp,
+            glassOverride = if (isEvaLight()) Color.White.copy(alpha = 0.86f) else Color(0xFF17141A).copy(alpha = 0.96f),
+            borderOverride = if (isEvaLight()) Color.Black.copy(alpha = 0.08f) else Color.White.copy(alpha = 0.09f)
         ) {
             when {
                 voicePreview != null -> VoicePreviewComposer(
@@ -608,7 +635,10 @@ fun ChatComposer(
                 )
 
                 else -> Row(verticalAlignment = Alignment.CenterVertically) {
-                    IconButton(onClick = { emojiPickerOpen = !emojiPickerOpen }) {
+                    IconButton(
+                        onClick = { emojiPickerOpen = !emojiPickerOpen },
+                        modifier = Modifier.size(42.dp)
+                    ) {
                         Icon(
                             Icons.Rounded.SentimentSatisfiedAlt,
                             contentDescription = "Emoji",
@@ -620,15 +650,26 @@ fun ChatComposer(
                         onValueChange = onDraftChange,
                         modifier = Modifier
                             .weight(1f)
-                            .onFocusEvent { onInputFocusChange(it.isFocused) },
+                            .bringIntoViewRequester(bringIntoViewRequester)
+                            .onFocusEvent { focusState ->
+                                onInputFocusChange(focusState.isFocused)
+                                if (focusState.isFocused) {
+                                    composerScope.launch {
+                                        delay(260)
+                                        bringIntoViewRequester.bringIntoView()
+                                    }
+                                }
+                            },
                         minLines = 1,
                         maxLines = 4,
                         textStyle = MaterialTheme.typography.bodyLarge.copy(
                             color = evaText(),
-                            fontWeight = FontWeight.Bold
+                            fontWeight = FontWeight.Medium,
+                            fontSize = 15.sp,
+                            lineHeight = 20.sp
                         ),
                         placeholder = {
-                            Text("Type a message...", color = evaMuted().copy(alpha = 0.62f))
+                            Text("Message...", color = evaMuted().copy(alpha = 0.62f))
                         },
                         keyboardOptions = KeyboardOptions(imeAction = ImeAction.Send),
                         keyboardActions = KeyboardActions(onSend = { onSend() }),
@@ -642,7 +683,7 @@ fun ChatComposer(
                     )
                     Box(
                         modifier = Modifier
-                            .size(54.dp)
+                            .size(50.dp)
                             .clip(CircleShape)
                             .background(EvaColors.Gradient)
                             .clickable(enabled = !sending) {
@@ -671,12 +712,12 @@ fun RecordingComposer(seconds: Int, onStop: () -> Unit) {
     Row(
         modifier = Modifier
             .fillMaxWidth()
-            .height(66.dp),
+            .height(58.dp),
         verticalAlignment = Alignment.CenterVertically
     ) {
         Box(
             modifier = Modifier
-                .size(46.dp)
+                .size(42.dp)
                 .clip(CircleShape)
                 .background(Color(0xFFE53945).copy(alpha = 0.18f)),
             contentAlignment = Alignment.Center
@@ -700,8 +741,8 @@ fun RecordingComposer(seconds: Int, onStop: () -> Unit) {
         }
         Box(
             modifier = Modifier
-                .height(46.dp)
-                .width(98.dp)
+                .height(42.dp)
+                .width(92.dp)
                 .clip(RoundedCornerShape(24.dp))
                 .background(Brush.linearGradient(listOf(Color(0xFFE53945), EvaColors.Coral)))
                 .clickable(onClick = onStop),
@@ -732,12 +773,12 @@ fun VoicePreviewComposer(
     Row(
         modifier = Modifier
             .fillMaxWidth()
-            .height(66.dp),
+            .height(58.dp),
         verticalAlignment = Alignment.CenterVertically
     ) {
         Box(
             modifier = Modifier
-                .size(46.dp)
+                .size(42.dp)
                 .clip(CircleShape)
                 .background(EvaColors.Pink.copy(alpha = 0.14f))
                 .clickable(enabled = !sending, onClick = onReplay),
@@ -770,7 +811,7 @@ fun VoicePreviewComposer(
         }
         Box(
             modifier = Modifier
-                .size(48.dp)
+                .size(46.dp)
                 .clip(CircleShape)
                 .background(EvaColors.Gradient)
                 .clickable(enabled = !sending, onClick = onSend),

@@ -49,6 +49,7 @@ class EvaAppController @Inject constructor(
     var subscriptionBusy by mutableStateOf(false)
     var selectedCompanion by mutableStateOf(settingsStore.selectedCompanion())
     var selectedReplyStyle by mutableStateOf(settingsStore.selectedReplyStyle())
+    var pendingConversationId by mutableStateOf<String?>(null)
 
     val messages = mutableStateListOf<ChatMessage>()
     val conversations = mutableStateListOf<ConversationPreview>()
@@ -66,6 +67,11 @@ class EvaAppController @Inject constructor(
                 authState = AuthState.SignedIn(user)
                 loadChats()
                 refreshSubscription(silent = true)
+                syncDeviceToken()
+                pendingConversationId?.let { requested ->
+                    pendingConversationId = null
+                    openConversation(requested)
+                }
             }
             .onFailure { error ->
                 val cachedUser = api.savedUser()
@@ -157,6 +163,7 @@ class EvaAppController @Inject constructor(
             notice = "Welcome back, ${session.user.name}."
             loadChats()
             refreshSubscription(silent = true)
+            syncDeviceToken()
         }.onFailure { error ->
             notice = error.cleanMessage("That code could not be verified.")
         }
@@ -172,6 +179,7 @@ class EvaAppController @Inject constructor(
             notice = "Signed in as ${session.user.name}."
             loadChats()
             refreshSubscription(silent = true)
+            syncDeviceToken()
         }.onFailure { error ->
             notice = error.cleanMessage("Google sign-in failed.")
         }
@@ -203,23 +211,31 @@ class EvaAppController @Inject constructor(
             notice = "Signed in as ${session.user.name}."
             loadChats()
             refreshSubscription(silent = true)
+            syncDeviceToken()
         }.onFailure { redirectError ->
             notice = redirectError.cleanMessage("Google sign-in could not be completed.")
         }
         authBusy = false
     }
 
-    fun signOut() {
+    suspend fun signOut() {
+        runCatching { api.unregisterFcmDevice() }
         api.clearSession()
         authState = AuthState.SignedOut
         messages.clear()
         conversations.clear()
         subscriptionState = null
         selectedConversationId = null
+        pendingConversationId = null
         activeTab = EvaTab.Home
         premiumOpen = false
         callOpen = false
         backendLive = false
+    }
+
+    suspend fun syncDeviceToken() {
+        if (authState !is AuthState.SignedIn) return
+        runCatching { api.registerFcmDevice() }
     }
 
     suspend fun loadChats() {
@@ -244,6 +260,47 @@ class EvaAppController @Inject constructor(
             if (messages.isEmpty()) seedLocalMessages()
         }
         chatsLoading = false
+    }
+
+    suspend fun openConversationFromNotification(conversationId: String) {
+        pendingConversationId = conversationId
+        if (authState is AuthState.Loading) return
+        pendingConversationId = null
+        openConversation(conversationId)
+    }
+
+    suspend fun openConversation(conversationId: String) {
+        activeTab = EvaTab.Chat
+        premiumOpen = false
+        callOpen = false
+        conversations.firstOrNull { it.id == conversationId }?.let { preview ->
+            selectedCompanion = companionById(preview.companionId)
+            persistSelectedCompanion()
+        }
+        selectedConversationId = conversationId
+        chatsLoading = true
+        runCatching {
+            val loadedMessages = api.messages(conversationId)
+            messages.clear()
+            messages.addAll(loadedMessages)
+            backendLive = true
+            if (messages.isEmpty()) seedLocalMessages()
+        }.onFailure {
+            backendLive = false
+            if (messages.isEmpty()) seedLocalMessages()
+        }
+        chatsLoading = false
+    }
+
+    suspend fun reloadCurrentConversation() {
+        if (sending) return
+        val conversationId = selectedConversationId ?: return loadChats()
+        runCatching {
+            val loadedMessages = api.messages(conversationId)
+            messages.clear()
+            messages.addAll(loadedMessages)
+            backendLive = true
+        }
     }
 
     fun selectCompanion(profile: CompanionProfile) {

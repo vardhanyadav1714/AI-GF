@@ -3,6 +3,7 @@ package com.eva.ai.data.remote
 import android.content.Context
 import android.net.Uri
 import android.util.Base64
+import com.eva.ai.EvaNotificationCenter
 import com.eva.ai.R
 import com.eva.ai.domain.model.AuthSession
 import com.eva.ai.domain.model.ChatMessage
@@ -31,7 +32,7 @@ import javax.inject.Inject
 import dagger.hilt.android.qualifiers.ApplicationContext
 
 class MeriGfApi @Inject constructor(
-    @ApplicationContext context: Context
+    @ApplicationContext private val context: Context
 ) {
     private val prefs = context.getSharedPreferences("meri_gf_session", Context.MODE_PRIVATE)
     private val baseUrl = context.getString(R.string.backend_base_url).trimEnd('/')
@@ -385,6 +386,27 @@ class MeriGfApi @Inject constructor(
                 .put("details", details.take(1000))
         )
     }
+
+    suspend fun registerFcmDevice(): Boolean = runCatching {
+        val token = EvaNotificationCenter.savedFcmToken(context) ?: return false
+        requestJson(
+            method = "POST",
+            path = "/devices",
+            body = JSONObject()
+                .put("token", token)
+                .put("platform", "android")
+        )
+        true
+    }.getOrDefault(false)
+
+    suspend fun unregisterFcmDevice(): Boolean = runCatching {
+        val token = EvaNotificationCenter.savedFcmToken(context) ?: return false
+        requestJson(
+            method = "DELETE",
+            path = "/devices/${token.urlPath()}"
+        )
+        true
+    }.getOrDefault(false)
 
     private suspend fun requestObject(
         method: String,

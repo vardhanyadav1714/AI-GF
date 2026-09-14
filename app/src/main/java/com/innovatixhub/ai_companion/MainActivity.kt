@@ -59,6 +59,7 @@ class MainActivity : ComponentActivity() {
         }
         setupNotifications()
         handleAuthIntent(intent)
+        handleConversationIntent(intent)
 
         setContent {
             val controller = remember { controller }
@@ -82,6 +83,7 @@ class MainActivity : ComponentActivity() {
         super.onNewIntent(intent)
         setIntent(intent)
         handleAuthIntent(intent)
+        handleConversationIntent(intent)
     }
 
     override fun onResume() {
@@ -158,11 +160,22 @@ class MainActivity : ComponentActivity() {
         }
     }
 
+    private fun handleConversationIntent(intent: Intent?) {
+        val conversationId = intent?.getStringExtra(EvaNotificationCenter.EXTRA_CONVERSATION_ID) ?: return
+        intent.removeExtra(EvaNotificationCenter.EXTRA_CONVERSATION_ID)
+        lifecycleScope.launch {
+            controller.openConversationFromNotification(conversationId)
+        }
+    }
+
     private fun setupNotifications() {
         EvaNotificationCenter.ensureChannels(this)
         askNotificationPermissionIfNeeded()
         FirebaseMessaging.getInstance().token.addOnSuccessListener { token ->
             EvaNotificationCenter.saveFcmToken(this, token)
+            lifecycleScope.launch {
+                controller.syncDeviceToken()
+            }
         }
         FirebaseMessaging.getInstance().subscribeToTopic("eva_users")
     }
