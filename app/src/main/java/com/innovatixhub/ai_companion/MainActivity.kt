@@ -28,6 +28,7 @@ import com.google.android.libraries.identity.googleid.GoogleIdTokenParsingExcept
 import com.eva.ai.presentation.EvaAppController
 import com.eva.ai.presentation.EvaApplication
 import com.eva.ai.presentation.components.EvaColors
+import com.eva.ai.data.billing.PlayBillingManager
 import dagger.hilt.android.AndroidEntryPoint
 import javax.inject.Inject
 import kotlinx.coroutines.launch
@@ -38,6 +39,19 @@ class MainActivity : ComponentActivity() {
     @Inject
     lateinit var controller: EvaAppController
     private val credentialManager by lazy { CredentialManager.create(this) }
+    private val playBilling: PlayBillingManager by lazy {
+        PlayBillingManager(
+            context = this,
+            onPurchased = { purchaseToken, productId ->
+                lifecycleScope.launch {
+                    val verified = controller.verifyGooglePlayPurchase(purchaseToken, productId)
+                    if (verified) {
+                        playBilling.acknowledge(purchaseToken)
+                    }
+                }
+            }
+        )
+    }
     private val notificationPermissionLauncher = registerForActivityResult(
         ActivityResultContracts.RequestPermission()
     ) { granted ->
@@ -58,6 +72,7 @@ class MainActivity : ComponentActivity() {
             isAppearanceLightNavigationBars = false
         }
         setupNotifications()
+        playBilling.connect()
         handleAuthIntent(intent)
         handleConversationIntent(intent)
 
@@ -74,6 +89,12 @@ class MainActivity : ComponentActivity() {
                 scope = scope,
                 onGoogleSignIn = {
                     openGoogleSignIn()
+                },
+                onGooglePlaySubscribe = {
+                    controller.notice = null
+                    playBilling.launchSubscribe(this@MainActivity) { message ->
+                        controller.notice = message
+                    }
                 }
             )
         }

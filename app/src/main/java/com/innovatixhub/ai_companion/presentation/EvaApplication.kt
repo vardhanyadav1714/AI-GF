@@ -87,7 +87,8 @@ import kotlin.math.max
 fun EvaApplication(
     controller: EvaAppController,
     scope: CoroutineScope,
-    onGoogleSignIn: () -> Unit
+    onGoogleSignIn: () -> Unit,
+    onGooglePlaySubscribe: () -> Unit
 ) {
     AICompanionTheme(darkTheme = !controller.lightMode, dynamicColor = false) {
         CompositionLocalProvider(LocalEvaLightMode provides controller.lightMode) {
@@ -126,7 +127,8 @@ fun EvaApplication(
                         is AuthState.SignedIn -> EvaShell(
                             controller = controller,
                             user = auth.user,
-                            scope = scope
+                            scope = scope,
+                            onGooglePlaySubscribe = onGooglePlaySubscribe
                         )
                     }
                 }
@@ -164,7 +166,12 @@ fun EvaSystemBars(lightMode: Boolean) {
 }
 
 @Composable
-fun EvaShell(controller: EvaAppController, user: EvaUser, scope: CoroutineScope) {
+fun EvaShell(
+    controller: EvaAppController,
+    user: EvaUser,
+    scope: CoroutineScope,
+    onGooglePlaySubscribe: () -> Unit
+) {
     val context = LocalContext.current
     Box(Modifier.fillMaxSize()) {
         AnimatedContent(
@@ -180,6 +187,7 @@ fun EvaShell(controller: EvaAppController, user: EvaUser, scope: CoroutineScope)
                 controller.premiumOpen -> PremiumScreen(
                     subscription = controller.subscriptionState,
                     busy = controller.subscriptionBusy,
+                    googlePlayBusy = controller.subscriptionBusy,
                     onBack = { controller.premiumOpen = false },
                     onContinue = {
                         scope.launch {
@@ -195,7 +203,8 @@ fun EvaShell(controller: EvaAppController, user: EvaUser, scope: CoroutineScope)
                     },
                     onRefresh = {
                         scope.launch { controller.refreshSubscription() }
-                    }
+                    },
+                    onGooglePlay = onGooglePlaySubscribe
                 )
 
                 controller.activeTab == EvaTab.Home -> HomeScreen(

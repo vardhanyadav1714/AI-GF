@@ -89,7 +89,9 @@ fun PremiumScreen(
     busy: Boolean,
     onBack: () -> Unit,
     onContinue: () -> Unit,
-    onRefresh: () -> Unit
+    onRefresh: () -> Unit,
+    onGooglePlay: (() -> Unit)? = null,
+    googlePlayBusy: Boolean = false
 ) {
     val plan = subscription?.plan ?: SubscriptionPlan(
         planId = "plan_TRv3HKpujDyFoS",
@@ -149,7 +151,7 @@ fun PremiumScreen(
                     PriceCard(
                         title = "Monthly",
                         price = plan.formattedAmount,
-                        tag = "PLAN 299",
+                        tag = "MONTHLY PLAN",
                         selected = true,
                         onClick = {},
                         modifier = Modifier.weight(1f)
@@ -202,6 +204,20 @@ fun PremiumScreen(
                     enabled = !busy && !active,
                     onClick = onContinue
                 )
+            }
+            item {
+                onGooglePlay?.let { onPlay ->
+                    GradientButton(
+                        icon = Icons.Rounded.PlayCircle,
+                        label = when {
+                            active -> "Premium Active"
+                            googlePlayBusy -> "Opening Google Play"
+                            else -> "Pay with Google Play"
+                        },
+                        enabled = !active && !googlePlayBusy,
+                        onClick = onPlay
+                    )
+                }
             }
             item {
                 Text(

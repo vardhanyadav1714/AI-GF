@@ -60,6 +60,7 @@ dependencies {
     implementation(libs.androidx.lifecycle.runtime.ktx)
     implementation(libs.firebase.messaging)
     implementation(libs.googleid)
+    implementation("com.android.billingclient:billing-ktx:9.1.0")
     implementation(libs.hilt.android)
     add("ksp", libs.hilt.compiler)
     add("ksp", "com.squareup:kotlinpoet:1.13.2")

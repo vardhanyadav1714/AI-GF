@@ -149,6 +149,17 @@ class MeriGfApi @Inject constructor(
         )
     }
 
+    suspend fun verifyGooglePlay(purchaseToken: String, productId: String): SubscriptionState {
+        val data = requestObject(
+            method = "POST",
+            path = "/subscriptions/google/verify",
+            body = JSONObject()
+                .put("purchaseToken", purchaseToken)
+                .put("productId", productId)
+        )
+        return parseSubscriptionState(data.optJSONObject("subscription") ?: data)
+    }
+
     suspend fun conversations(): List<ConversationPreview> {
         val data = requestJson(method = "GET", path = "/conversations")
         val array = when (data) {
@@ -358,13 +369,17 @@ class MeriGfApi @Inject constructor(
             currency = currency,
             interval = planJson.bestString("interval", default = "monthly")
         )
+        val usage = json.optJSONObject("usage")
         return SubscriptionState(
             active = json.optBoolean("active", false),
             status = json.optString("status", "none"),
             providerSubscriptionId = json.bestString("providerSubscriptionId", "subscriptionId", default = ""),
             checkoutUrl = json.bestString("checkoutUrl", default = ""),
             plan = plan,
-            currentEnd = json.optString("currentEnd", "").ifBlank { null }
+            currentEnd = json.optString("currentEnd", "").ifBlank { null },
+            freeUsed = usage?.optInt("freeUsed", 0) ?: 0,
+            freeLimit = usage?.optInt("freeLimit", 10) ?: 10,
+            freeRemaining = usage?.takeIf { !it.isNull("freeRemaining") }?.optInt("freeRemaining", 0)
         )
     }
 

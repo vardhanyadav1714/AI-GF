@@ -74,7 +74,10 @@ data class SubscriptionState(
     val providerSubscriptionId: String,
     val checkoutUrl: String,
     val plan: SubscriptionPlan,
-    val currentEnd: String?
+    val currentEnd: String?,
+    val freeUsed: Int = 0,
+    val freeLimit: Int = 10,
+    val freeRemaining: Int? = null
 )
 
 data class SubscriptionCheckout(

@@ -47,6 +47,8 @@ class EvaAppController @Inject constructor(
     var chatsLoading by mutableStateOf(false)
     var subscriptionState by mutableStateOf<SubscriptionState?>(null)
     var subscriptionBusy by mutableStateOf(false)
+    /** null = unknown or unlimited (premium). */
+    var freeMessagesRemaining by mutableStateOf<Int?>(null)
     var selectedCompanion by mutableStateOf(settingsStore.selectedCompanion())
     var selectedReplyStyle by mutableStateOf(settingsStore.selectedReplyStyle())
     var pendingConversationId by mutableStateOf<String?>(null)
@@ -68,6 +70,7 @@ class EvaAppController @Inject constructor(
                 loadChats()
                 refreshSubscription(silent = true)
                 syncDeviceToken()
+                notice = welcomeNotice(user.name)
                 pendingConversationId?.let { requested ->
                     pendingConversationId = null
                     openConversation(requested)
@@ -97,11 +100,56 @@ class EvaAppController @Inject constructor(
             api.subscriptionStatus(sync = !silent)
         }.onSuccess { state ->
             subscriptionState = state
+            freeMessagesRemaining = if (state.active) null else state.freeRemaining
         }.onFailure { error ->
             if (!silent) notice = error.cleanMessage("Could not refresh subscription.")
         }.isSuccess
         if (!silent) subscriptionBusy = false
         return refreshed
+    }
+
+    suspend fun verifyGooglePlayPurchase(purchaseToken: String, productId: String): Boolean {
+        if (authState !is AuthState.SignedIn) return false
+        subscriptionBusy = true
+        var verified = false
+        runCatching {
+            api.verifyGooglePlay(purchaseToken, productId)
+        }.onSuccess { state ->
+            subscriptionState = state
+            freeMessagesRemaining = if (state.active) null else state.freeRemaining
+            verified = state.active
+            notice = if (state.active) {
+                "Premium is active. Enjoy unlimited chats!"
+            } else {
+                "Google Play purchase is not active yet (${state.status})."
+            }
+        }.onFailure { error ->
+            notice = error.cleanMessage("Google Play purchase could not be verified.")
+        }
+        subscriptionBusy = false
+        return verified
+    }
+
+    private fun welcomeNotice(name: String): String {
+        val premium = subscriptionState?.active == true
+        val remaining = freeMessagesRemaining
+        return when {
+            premium -> "Signed in as $name. Premium is active."
+            remaining != null && remaining > 0 ->
+                "Signed in as $name. $remaining free message${if (remaining == 1) "" else "s"} left."
+            remaining != null && remaining <= 0 ->
+                "Signed in as $name. Free messages are over — upgrade to Premium."
+            else -> "Signed in as $name."
+        }
+    }
+
+    private fun handleMessageLimitReached(userIndex: Int, placeholderIndex: Int) {
+        if (placeholderIndex in messages.indices) messages.removeAt(placeholderIndex)
+        if (userIndex in messages.indices) messages.removeAt(userIndex)
+        backendLive = true
+        freeMessagesRemaining = 0
+        notice = "You have used all your free messages. Get Premium to keep chatting."
+        premiumOpen = true
     }
 
     suspend fun startPremiumSubscription(): String? {
@@ -160,10 +208,10 @@ class EvaAppController @Inject constructor(
             api.verifyEmailCode(email = email.trim(), code = cleanCode)
         }.onSuccess { session ->
             authState = AuthState.SignedIn(session.user)
-            notice = "Welcome back, ${session.user.name}."
             loadChats()
             refreshSubscription(silent = true)
             syncDeviceToken()
+            notice = welcomeNotice(session.user.name)
         }.onFailure { error ->
             notice = error.cleanMessage("That code could not be verified.")
         }
@@ -176,10 +224,10 @@ class EvaAppController @Inject constructor(
             api.signInWithGoogle(idToken)
         }.onSuccess { session ->
             authState = AuthState.SignedIn(session.user)
-            notice = "Signed in as ${session.user.name}."
             loadChats()
             refreshSubscription(silent = true)
             syncDeviceToken()
+            notice = welcomeNotice(session.user.name)
         }.onFailure { error ->
             notice = error.cleanMessage("Google sign-in failed.")
         }
@@ -208,10 +256,10 @@ class EvaAppController @Inject constructor(
             }
         }.onSuccess { session ->
             authState = AuthState.SignedIn(session.user)
-            notice = "Signed in as ${session.user.name}."
             loadChats()
             refreshSubscription(silent = true)
             syncDeviceToken()
+            notice = welcomeNotice(session.user.name)
         }.onFailure { redirectError ->
             notice = redirectError.cleanMessage("Google sign-in could not be completed.")
         }
@@ -349,15 +397,20 @@ class EvaAppController @Inject constructor(
         liveResult.onSuccess { result ->
             backendLive = true
             selectedConversationId = result.conversationId
+            consumeLocalFreeMessage()
             messages[placeholderIndex] = messages[placeholderIndex].copy(
                 text = result.assistantText.ifBlank {
                     "I am here with you. Tell me a little more?"
                 },
                 streaming = false
             )
-        }.onFailure {
-            backendLive = false
-            streamLocalReply(cleanText, placeholderIndex)
+        }.onFailure { error ->
+            if (error is ApiException && error.statusCode == 402) {
+                handleMessageLimitReached(placeholderIndex - 1, placeholderIndex)
+            } else {
+                backendLive = false
+                streamLocalReply(cleanText, placeholderIndex)
+            }
         }
         sending = false
     }
@@ -444,6 +497,7 @@ class EvaAppController @Inject constructor(
         liveResult.onSuccess { result ->
             backendLive = true
             selectedConversationId = result.conversationId
+            consumeLocalFreeMessage()
             if (userIndex in messages.indices) {
                 messages[userIndex] = messages[userIndex].copy(
                     text = result.transcript.ifBlank { "Voice note" },
@@ -475,12 +529,21 @@ class EvaAppController @Inject constructor(
             }
             playback = result
         }.onFailure { error ->
-            backendLive = false
-            notice = error.cleanMessage("Voice message could not be sent.")
-            streamLocalReply("voice", placeholderIndex)
+            if (error is ApiException && error.statusCode == 402) {
+                handleMessageLimitReached(userIndex, placeholderIndex)
+            } else {
+                backendLive = false
+                notice = error.cleanMessage("Voice message could not be sent.")
+                streamLocalReply("voice", placeholderIndex)
+            }
         }
         sending = false
         return playback
+    }
+
+    private fun consumeLocalFreeMessage() {
+        val remaining = freeMessagesRemaining ?: return
+        freeMessagesRemaining = (remaining - 1).coerceAtLeast(0)
     }
 
     fun clearNotice() {
