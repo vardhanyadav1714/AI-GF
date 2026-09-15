@@ -174,6 +174,15 @@ fun EvaShell(
 ) {
     val context = LocalContext.current
     Box(Modifier.fillMaxSize()) {
+        if (controller.needsDateOfBirth) {
+            DateOfBirthDialog(
+                busy = controller.authBusy,
+                onSkip = { controller.needsDateOfBirth = false },
+                onSave = { iso ->
+                    scope.launch { controller.saveDateOfBirth(iso) }
+                }
+            )
+        }
         AnimatedContent(
             targetState = "${controller.activeTab}-${controller.premiumOpen}-${controller.callOpen}-${controller.lightMode}-${controller.selectedCompanion.id}",
             label = "eva-shell"
@@ -246,3 +255,90 @@ fun EvaShell(
     }
 }
 
+@Composable
+fun DateOfBirthDialog(
+    busy: Boolean,
+    onSkip: () -> Unit,
+    onSave: (isoDate: String) -> Unit
+) {
+    var day by remember { mutableStateOf("") }
+    var month by remember { mutableStateOf("") }
+    var year by remember { mutableStateOf("") }
+    var error by remember { mutableStateOf<String?>(null) }
+
+    fun validatedIso(): String? {
+        val d = day.trim()
+        val m = month.trim()
+        val y = year.trim()
+        if (d.length != 2 || m.length != 2 || y.length != 4) return null
+        val dayInt = d.toIntOrNull() ?: return null
+        val monthInt = m.toIntOrNull() ?: return null
+        val yearInt = y.toIntOrNull() ?: return null
+        if (monthInt !in 1..12) return null
+        if (yearInt < 1900 || yearInt > java.util.Calendar.getInstance().get(java.util.Calendar.YEAR)) return null
+        val daysInMonth = when (monthInt) {
+            1, 3, 5, 7, 8, 10, 12 -> 31
+            4, 6, 9, 11 -> 30
+            else -> if (yearInt % 4 == 0 && (yearInt % 100 != 0 || yearInt % 400 == 0)) 29 else 28
+        }
+        if (dayInt !in 1..daysInMonth) return null
+        return "$yearInt-${m.padStart(2, '0')}-${d.padStart(2, '0')}"
+    }
+
+    AlertDialog(
+        onDismissRequest = onSkip,
+        title = { Text("Your birthday", fontWeight = FontWeight.Black) },
+        text = {
+            Column {
+                Text(
+                    "Eva uses this for birthday wishes and to confirm you are 18 or older.",
+                    color = evaMuted()
+                )
+                Spacer(Modifier.height(12.dp))
+                Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                    OutlinedTextField(
+                        value = day,
+                        onValueChange = { day = it.filter(Char::isDigit).take(2) },
+                        label = { Text("DD") },
+                        keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
+                        singleLine = true,
+                        modifier = Modifier.weight(1f)
+                    )
+                    OutlinedTextField(
+                        value = month,
+                        onValueChange = { month = it.filter(Char::isDigit).take(2) },
+                        label = { Text("MM") },
+                        keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
+                        singleLine = true,
+                        modifier = Modifier.weight(1f)
+                    )
+                    OutlinedTextField(
+                        value = year,
+                        onValueChange = { year = it.filter(Char::isDigit).take(4) },
+                        label = { Text("YYYY") },
+                        keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
+                        singleLine = true,
+                        modifier = Modifier.weight(1.4f)
+                    )
+                }
+                error?.let {
+                    Spacer(Modifier.height(8.dp))
+                    Text(it, color = EvaColors.Coral)
+                }
+            }
+        },
+        confirmButton = {
+            TextButton(enabled = !busy, onClick = {
+                val iso = validatedIso()
+                if (iso == null) {
+                    error = "Enter a valid date of birth."
+                } else {
+                    onSave(iso)
+                }
+            }) { Text("Save") }
+        },
+        dismissButton = {
+            TextButton(onClick = onSkip) { Text("Later") }
+        }
+    )
+}

@@ -49,6 +49,7 @@ class EvaAppController @Inject constructor(
     var subscriptionBusy by mutableStateOf(false)
     /** null = unknown or unlimited (premium). */
     var freeMessagesRemaining by mutableStateOf<Int?>(null)
+    var needsDateOfBirth by mutableStateOf(false)
     var selectedCompanion by mutableStateOf(settingsStore.selectedCompanion())
     var selectedReplyStyle by mutableStateOf(settingsStore.selectedReplyStyle())
     var pendingConversationId by mutableStateOf<String?>(null)
@@ -67,6 +68,7 @@ class EvaAppController @Inject constructor(
         runCatching { api.me() }
             .onSuccess { user ->
                 authState = AuthState.SignedIn(user)
+                needsDateOfBirth = user.dateOfBirth == null
                 loadChats()
                 refreshSubscription(silent = true)
                 syncDeviceToken()
@@ -208,6 +210,7 @@ class EvaAppController @Inject constructor(
             api.verifyEmailCode(email = email.trim(), code = cleanCode)
         }.onSuccess { session ->
             authState = AuthState.SignedIn(session.user)
+            needsDateOfBirth = session.user.dateOfBirth == null
             loadChats()
             refreshSubscription(silent = true)
             syncDeviceToken()
@@ -224,6 +227,7 @@ class EvaAppController @Inject constructor(
             api.signInWithGoogle(idToken)
         }.onSuccess { session ->
             authState = AuthState.SignedIn(session.user)
+            needsDateOfBirth = session.user.dateOfBirth == null
             loadChats()
             refreshSubscription(silent = true)
             syncDeviceToken()
@@ -256,6 +260,7 @@ class EvaAppController @Inject constructor(
             }
         }.onSuccess { session ->
             authState = AuthState.SignedIn(session.user)
+            needsDateOfBirth = session.user.dateOfBirth == null
             loadChats()
             refreshSubscription(silent = true)
             syncDeviceToken()
@@ -266,10 +271,50 @@ class EvaAppController @Inject constructor(
         authBusy = false
     }
 
+    suspend fun saveDateOfBirth(dateOfBirth: String): Boolean {
+        if (authState !is AuthState.SignedIn) return false
+        var saved = false
+        runCatching {
+            api.updateProfile(displayName = null, preferredName = null, occupation = null, dateOfBirth = dateOfBirth)
+        }.onSuccess { user ->
+            authState = AuthState.SignedIn(user)
+            needsDateOfBirth = false
+            saved = true
+            notice = "Birthday saved. You're all set."
+        }.onFailure { error ->
+            notice = error.cleanMessage("Could not save your birthday.")
+        }
+        return saved
+    }
+
+    suspend fun updateProfile(
+        displayName: String,
+        preferredName: String,
+        occupation: String
+    ): Boolean {
+        if (authState !is AuthState.SignedIn) return false
+        var saved = false
+        runCatching {
+            api.updateProfile(
+                displayName = displayName,
+                preferredName = preferredName,
+                occupation = occupation
+            )
+        }.onSuccess { user ->
+            authState = AuthState.SignedIn(user)
+            saved = true
+            notice = "Profile updated."
+        }.onFailure { error ->
+            notice = error.cleanMessage("Could not update your profile.")
+        }
+        return saved
+    }
+
     suspend fun signOut() {
         runCatching { api.unregisterFcmDevice() }
         api.clearSession()
         authState = AuthState.SignedOut
+        needsDateOfBirth = false
         messages.clear()
         conversations.clear()
         subscriptionState = null

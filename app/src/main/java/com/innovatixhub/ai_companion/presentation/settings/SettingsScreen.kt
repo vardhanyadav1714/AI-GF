@@ -338,6 +338,7 @@ fun ProfileScreen(controller: EvaAppController, user: EvaUser, scope: CoroutineS
                         ProfileRow(Icons.Rounded.GraphicEq, "Voice & Style", companion.voiceStyle)
                         ProfileRow(Icons.Rounded.Star, "Interests", companion.interests)
                         ProfileRow(Icons.Rounded.LocationOn, "Born in", "${companion.bornIn} / ${companion.age}")
+                        ProfileEditor(controller, user, scope)
                         Row(
                             modifier = Modifier
                                 .fillMaxWidth()
@@ -370,4 +371,63 @@ fun ProfileScreen(controller: EvaAppController, user: EvaUser, scope: CoroutineS
     }
 }
 
+@Composable
+fun ProfileEditor(controller: EvaAppController, user: EvaUser, scope: CoroutineScope) {
+    var editName by remember(user.name) { mutableStateOf(user.name) }
+    var editPreferred by remember(user.preferredName) { mutableStateOf(user.preferredName.orEmpty()) }
+    var editOccupation by remember(user.occupation) { mutableStateOf(user.occupation.orEmpty()) }
+    var saving by remember { mutableStateOf(false) }
 
+    GlassCard(modifier = Modifier.fillMaxWidth()) {
+        Column {
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Icon(Icons.Rounded.Edit, contentDescription = null, tint = EvaColors.Pink, modifier = Modifier.size(16.dp))
+                Spacer(Modifier.width(8.dp))
+                Text("Edit profile", fontWeight = FontWeight.Black, fontSize = 15.sp)
+            }
+            Spacer(Modifier.height(10.dp))
+            OutlinedTextField(
+                value = editName,
+                onValueChange = { editName = it },
+                label = { Text("Your name") },
+                singleLine = true,
+                modifier = Modifier.fillMaxWidth()
+            )
+            Spacer(Modifier.height(8.dp))
+            OutlinedTextField(
+                value = editPreferred,
+                onValueChange = { editPreferred = it },
+                label = { Text("What Eva calls you") },
+                singleLine = true,
+                modifier = Modifier.fillMaxWidth()
+            )
+            Spacer(Modifier.height(8.dp))
+            OutlinedTextField(
+                value = editOccupation,
+                onValueChange = { editOccupation = it },
+                label = { Text("Occupation") },
+                singleLine = true,
+                modifier = Modifier.fillMaxWidth()
+            )
+            Spacer(Modifier.height(10.dp))
+            Text(
+                if (saving) "Saving..." else "Save profile",
+                color = EvaColors.Pink,
+                fontWeight = FontWeight.ExtraBold,
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .clickable(enabled = !saving && editName.isNotBlank()) {
+                        scope.launch {
+                            saving = true
+                            controller.updateProfile(
+                                displayName = editName.trim(),
+                                preferredName = editPreferred.trim(),
+                                occupation = editOccupation.trim()
+                            )
+                            saving = false
+                        }
+                    }
+            )
+        }
+    }
+}

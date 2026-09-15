@@ -50,7 +50,10 @@ class MeriGfApi @Inject constructor(
             id = id,
             name = prefs.getString("user_name", null)?.takeIf { it.isNotBlank() } ?: "Vardhan",
             email = prefs.getString("user_email", null).orEmpty(),
-            avatarUrl = prefs.getString("user_avatar_url", null)?.takeIf { it.isNotBlank() }
+            avatarUrl = prefs.getString("user_avatar_url", null)?.takeIf { it.isNotBlank() },
+            dateOfBirth = prefs.getString("user_dob", null)?.takeIf { it.isNotBlank() },
+            preferredName = prefs.getString("user_preferred_name", null)?.takeIf { it.isNotBlank() },
+            occupation = prefs.getString("user_occupation", null)?.takeIf { it.isNotBlank() }
         )
     }
 
@@ -124,6 +127,21 @@ class MeriGfApi @Inject constructor(
     suspend fun me(): EvaUser {
         val data = requestObject(method = "GET", path = "/auth/me")
         return parseUser(data.optJSONObject("user") ?: data).also(::saveUser)
+    }
+
+    suspend fun updateProfile(
+        displayName: String?,
+        preferredName: String?,
+        occupation: String?,
+        dateOfBirth: String? = null
+    ): EvaUser {
+        val body = JSONObject()
+        displayName?.takeIf { it.isNotBlank() }?.let { body.put("displayName", it.trim()) }
+        preferredName?.let { body.put("preferredName", it.trim()) }
+        occupation?.let { body.put("occupation", it.trim()) }
+        dateOfBirth?.takeIf { it.isNotBlank() }?.let { body.put("dateOfBirth", it) }
+        val data = requestObject(method = "PUT", path = "/profile", body = body)
+        return parseUser(data).also(::saveUser)
     }
 
     suspend fun subscriptionStatus(sync: Boolean = false): SubscriptionState {
@@ -339,6 +357,9 @@ class MeriGfApi @Inject constructor(
             .putString("user_name", user.name)
             .putString("user_email", user.email)
             .putString("user_avatar_url", user.avatarUrl.orEmpty())
+            .putString("user_dob", user.dateOfBirth.orEmpty())
+            .putString("user_preferred_name", user.preferredName.orEmpty())
+            .putString("user_occupation", user.occupation.orEmpty())
             .apply()
     }
 
@@ -349,9 +370,12 @@ class MeriGfApi @Inject constructor(
         }.ifBlank { "Vardhan" }
         return EvaUser(
             id = json.bestString("userId", "id", "_id", default = "user"),
-            name = json.bestString("name", "displayName", "preferredName", default = fallbackName),
+            name = json.bestString("name", "displayName", default = fallbackName),
             email = email,
-            avatarUrl = json.optString("avatarUrl", "").ifBlank { null }
+            avatarUrl = json.optString("avatarUrl", "").ifBlank { null },
+            dateOfBirth = json.optString("dateOfBirth", "").ifBlank { null },
+            preferredName = json.optString("preferredName", "").ifBlank { null },
+            occupation = json.optString("occupation", "").ifBlank { null }
         )
     }
 

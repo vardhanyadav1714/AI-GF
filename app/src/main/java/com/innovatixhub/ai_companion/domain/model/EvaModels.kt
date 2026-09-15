@@ -18,7 +18,10 @@ data class EvaUser(
     val id: String,
     val name: String,
     val email: String,
-    val avatarUrl: String? = null
+    val avatarUrl: String? = null,
+    val dateOfBirth: String? = null,
+    val preferredName: String? = null,
+    val occupation: String? = null
 )
 
 data class ChatMessage(
