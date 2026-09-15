@@ -23,3 +23,6 @@ app/release/
 *.jks
 *.keystore
 eva
+
+# Claude Code local session files
+.claude/
