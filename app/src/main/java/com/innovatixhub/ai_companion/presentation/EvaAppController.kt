@@ -150,8 +150,17 @@ class EvaAppController @Inject constructor(
         if (userIndex in messages.indices) messages.removeAt(userIndex)
         backendLive = true
         freeMessagesRemaining = 0
-        notice = "You have used all your free messages. Get Premium to keep chatting."
+        notice = "Your 10 free messages are over. Upgrade to Eva Premium for unlimited chats."
         premiumOpen = true
+    }
+
+    private fun shouldOpenPaywallBeforeSend(): Boolean {
+        val premium = subscriptionState?.active == true
+        if (premium || freeMessagesRemaining == null || freeMessagesRemaining!! > 0) return false
+        notice = "Your 10 free messages are over. Upgrade to Eva Premium for unlimited chats."
+        premiumOpen = true
+        activeTab = EvaTab.Chat
+        return true
     }
 
     suspend fun startPremiumSubscription(): String? {
@@ -416,6 +425,7 @@ class EvaAppController @Inject constructor(
     suspend fun sendMessage(quickText: String? = null) {
         val cleanText = (quickText ?: draft).trim()
         if (cleanText.isBlank() || sending) return
+        if (shouldOpenPaywallBeforeSend()) return
 
         activeTab = EvaTab.Chat
         premiumOpen = false
@@ -442,7 +452,7 @@ class EvaAppController @Inject constructor(
         liveResult.onSuccess { result ->
             backendLive = true
             selectedConversationId = result.conversationId
-            consumeLocalFreeMessage()
+            applyUsage(result.freeRemaining)
             messages[placeholderIndex] = messages[placeholderIndex].copy(
                 text = result.assistantText.ifBlank {
                     "I am here with you. Tell me a little more?"
@@ -496,6 +506,7 @@ class EvaAppController @Inject constructor(
             notice = "I could not hear anything. Try again."
             return null
         }
+        if (shouldOpenPaywallBeforeSend()) return null
         if (sending) {
             notice = "Wait for ${selectedCompanion.name} to finish replying first."
             return null
@@ -542,7 +553,7 @@ class EvaAppController @Inject constructor(
         liveResult.onSuccess { result ->
             backendLive = true
             selectedConversationId = result.conversationId
-            consumeLocalFreeMessage()
+            applyUsage(result.freeRemaining)
             if (userIndex in messages.indices) {
                 messages[userIndex] = messages[userIndex].copy(
                     text = result.transcript.ifBlank { "Voice note" },
@@ -586,9 +597,12 @@ class EvaAppController @Inject constructor(
         return playback
     }
 
-    private fun consumeLocalFreeMessage() {
-        val remaining = freeMessagesRemaining ?: return
-        freeMessagesRemaining = (remaining - 1).coerceAtLeast(0)
+    private fun applyUsage(remaining: Int?) {
+        freeMessagesRemaining = remaining
+        if (remaining == 0 && subscriptionState?.active != true) {
+            notice = "Your free messages are finished. Premium is ready when you want to continue."
+            premiumOpen = true
+        }
     }
 
     fun clearNotice() {
@@ -634,5 +648,3 @@ private fun String.isMongoObjectId(): Boolean =
     length == 24 && all { character ->
         character.isDigit() || character.lowercaseChar() in 'a'..'f'
     }
-
-

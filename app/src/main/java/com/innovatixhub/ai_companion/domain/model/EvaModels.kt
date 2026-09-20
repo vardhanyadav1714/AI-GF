@@ -51,7 +51,10 @@ data class AuthSession(
 
 data class SendMessageResult(
     val conversationId: String,
-    val assistantText: String
+    val assistantText: String,
+    val freeUsed: Int = 0,
+    val freeLimit: Int = 10,
+    val freeRemaining: Int? = null
 )
 
 data class VoiceSendResult(
@@ -59,7 +62,10 @@ data class VoiceSendResult(
     val transcript: String,
     val assistantText: String,
     val audioBase64: String,
-    val audioMimeType: String
+    val audioMimeType: String,
+    val freeUsed: Int = 0,
+    val freeLimit: Int = 10,
+    val freeRemaining: Int? = null
 )
 
 data class SubscriptionPlan(
@@ -129,4 +135,3 @@ data class ReplyStyle(
     val subtitle: String,
     val instruction: String
 )
-

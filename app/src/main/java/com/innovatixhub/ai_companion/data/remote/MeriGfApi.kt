@@ -175,7 +175,7 @@ class MeriGfApi @Inject constructor(
                 .put("purchaseToken", purchaseToken)
                 .put("productId", productId)
         )
-        return parseSubscriptionState(data.optJSONObject("subscription") ?: data)
+        return parseSubscriptionState(data.optJSONObject("subscription") ?: data, data.optJSONObject("usage"))
     }
 
     suspend fun conversations(): List<ConversationPreview> {
@@ -259,9 +259,13 @@ class MeriGfApi @Inject constructor(
                     ?: data.optJSONArray("messages")?.lastObjectWithRole("assistant")
                 messageObject?.bestString("content", "text", default = "").orEmpty()
             }
+        val usage = usageFrom(data)
         return SendMessageResult(
             conversationId = data.optString("conversationId", id),
-            assistantText = reply
+            assistantText = reply,
+            freeUsed = usage.first,
+            freeLimit = usage.second,
+            freeRemaining = usage.third
         )
     }
 
@@ -293,6 +297,7 @@ class MeriGfApi @Inject constructor(
                     ?: data.optJSONArray("messages")?.lastObjectWithRole("assistant")
                 messageObject?.bestString("content", "text", default = "").orEmpty()
             }
+        val usage = usageFrom(data)
         return VoiceSendResult(
             conversationId = data.bestString("conversationId", default = conversationId.orEmpty()),
             transcript = data.bestString("transcript", "text", default = "Voice note"),
@@ -300,7 +305,10 @@ class MeriGfApi @Inject constructor(
             audioBase64 = audio?.bestString("base64", "audioBase64", default = "")
                 ?: data.bestString("audioBase64", default = ""),
             audioMimeType = audio?.bestString("mimeType", default = "audio/wav")
-                ?: data.bestString("audioMimeType", default = "audio/wav")
+                ?: data.bestString("audioMimeType", default = "audio/wav"),
+            freeUsed = usage.first,
+            freeLimit = usage.second,
+            freeRemaining = usage.third
         )
     }
 
@@ -379,9 +387,18 @@ class MeriGfApi @Inject constructor(
         )
     }
 
-    private fun parseSubscriptionState(json: JSONObject): SubscriptionState {
+    private fun usageFrom(json: JSONObject): Triple<Int, Int, Int?> {
+        val usage = json.optJSONObject("usage")
+        return Triple(
+            usage?.optInt("freeUsed", 0) ?: 0,
+            usage?.optInt("freeLimit", 10) ?: 10,
+            usage?.takeIf { !it.isNull("freeRemaining") }?.optInt("freeRemaining", 0)
+        )
+    }
+
+    private fun parseSubscriptionState(json: JSONObject, usageOverride: JSONObject? = null): SubscriptionState {
         val planJson = json.optJSONObject("plan") ?: JSONObject()
-        val amount = planJson.optInt("amount", 29900)
+        val amount = planJson.optInt("amount", 49900)
         val currency = planJson.optString("currency", "INR").ifBlank { "INR" }
         val formattedAmount = planJson.bestString("formattedAmount", default = "")
             .ifBlank { "$currency ${amount / 100}" }
@@ -393,7 +410,7 @@ class MeriGfApi @Inject constructor(
             currency = currency,
             interval = planJson.bestString("interval", default = "monthly")
         )
-        val usage = json.optJSONObject("usage")
+        val usage = usageOverride ?: json.optJSONObject("usage")
         return SubscriptionState(
             active = json.optBoolean("active", false),
             status = json.optString("status", "none"),
@@ -591,5 +608,3 @@ fun JSONArray.lastObjectWithRole(role: String): JSONObject? {
 }
 
 fun String.urlPath(): String = URLEncoder.encode(this, Charsets.UTF_8.name())
-
-

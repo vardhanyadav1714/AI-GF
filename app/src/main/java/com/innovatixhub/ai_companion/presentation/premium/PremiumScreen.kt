@@ -96,8 +96,8 @@ fun PremiumScreen(
     val plan = subscription?.plan ?: SubscriptionPlan(
         planId = "plan_TRv3HKpujDyFoS",
         name = "Eva Premium Monthly",
-        amount = 29900,
-        formattedAmount = "INR 299",
+        amount = 49900,
+        formattedAmount = "INR 499",
         currency = "INR",
         interval = "monthly"
     )
@@ -138,11 +138,11 @@ fun PremiumScreen(
                         .fillMaxWidth()
                 ) {
                     Column {
-                        PremiumFeature(Icons.Rounded.Chat, "Unlimited Chats", "Talk as much as you want")
+                        PremiumFeature(Icons.Rounded.Chat, "Unlimited Chats", "Continue after your 10 free messages")
+                        PremiumFeature(Icons.Rounded.Psychology, "Shared Memory", "Eva remembers you across every companion")
                         PremiumFeature(Icons.Rounded.GraphicEq, "Voice Notes", "Send voice and hear audio replies")
                         PremiumFeature(Icons.Rounded.Star, "Custom Personality", "Make Eva your way")
-                        PremiumFeature(Icons.Rounded.Favorite, "Memory & Moments", "Save every special moment")
-                        PremiumFeature(Icons.Rounded.LockOpen, "No Ads", "Enjoy a clean experience")
+                        PremiumFeature(Icons.Rounded.Verified, "Google Play Billing", "Secure monthly subscription")
                     }
                 }
             }
@@ -233,5 +233,4 @@ fun PremiumScreen(
         }
     }
 }
-
 
