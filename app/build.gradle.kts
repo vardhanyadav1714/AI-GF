@@ -21,6 +21,7 @@ extensions.configure<ApplicationExtension>("android") {
         targetSdk = 37
         versionCode = 1
         versionName = "1.0"
+        buildConfigField("boolean", "ALTERNATIVE_BILLING_ENABLED", providers.gradleProperty("alternativeBillingEnabled").orElse("false").get())
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
     }
@@ -42,6 +43,7 @@ extensions.configure<ApplicationExtension>("android") {
     }
     buildFeatures {
         compose = true
+        buildConfig = true
     }
 }
 

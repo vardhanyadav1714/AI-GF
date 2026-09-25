@@ -178,8 +178,8 @@ fun EvaShell(
             DateOfBirthDialog(
                 busy = controller.authBusy,
                 onSkip = { controller.needsDateOfBirth = false },
-                onSave = { iso ->
-                    scope.launch { controller.saveDateOfBirth(iso) }
+                onSave = { iso, name ->
+                    scope.launch { controller.saveDateOfBirth(iso, name) }
                 }
             )
         }
@@ -259,8 +259,9 @@ fun EvaShell(
 fun DateOfBirthDialog(
     busy: Boolean,
     onSkip: () -> Unit,
-    onSave: (isoDate: String) -> Unit
+    onSave: (isoDate: String, preferredName: String) -> Unit
 ) {
+    var preferredName by remember { mutableStateOf("") }
     var day by remember { mutableStateOf("") }
     var month by remember { mutableStateOf("") }
     var year by remember { mutableStateOf("") }
@@ -287,9 +288,16 @@ fun DateOfBirthDialog(
 
     AlertDialog(
         onDismissRequest = onSkip,
-        title = { Text("Your birthday", fontWeight = FontWeight.Black) },
+        title = { Text("A little about you", fontWeight = FontWeight.Black) },
         text = {
             Column {
+                OutlinedTextField(
+                    value = preferredName,
+                    onValueChange = { preferredName = it.take(80) },
+                    label = { Text("What should we call you?") },
+                    singleLine = true
+                )
+                Spacer(Modifier.height(12.dp))
                 Text(
                     "Eva uses this for birthday wishes and to confirm you are 18 or older.",
                     color = evaMuted()
@@ -333,9 +341,9 @@ fun DateOfBirthDialog(
                 if (iso == null) {
                     error = "Enter a valid date of birth."
                 } else {
-                    onSave(iso)
+                    onSave(iso, preferredName.trim())
                 }
-            }) { Text("Save") }
+            }) { Text(if (busy) "Saving..." else "Continue") }
         },
         dismissButton = {
             TextButton(onClick = onSkip) { Text("Later") }

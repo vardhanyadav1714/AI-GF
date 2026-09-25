@@ -14,6 +14,7 @@ import com.android.billingclient.api.Purchase
 import com.android.billingclient.api.PurchasesUpdatedListener
 import com.android.billingclient.api.QueryProductDetailsParams
 import com.android.billingclient.api.QueryPurchasesParams
+import com.eva.ai.BuildConfig
 
 /**
  * Thin wrapper around Google Play Billing for the Eva Premium monthly
@@ -23,7 +24,8 @@ import com.android.billingclient.api.QueryPurchasesParams
 class PlayBillingManager(
     context: Context,
     private val onPurchased: (purchaseToken: String, productId: String) -> Unit,
-    private val onRestoreError: (String) -> Unit = {}
+    private val onRestoreError: (String) -> Unit = {},
+    private val onAlternativeBilling: (String) -> Unit = {}
 ) {
     private val mainHandler = Handler(Looper.getMainLooper())
 
@@ -44,7 +46,14 @@ class PlayBillingManager(
 
     private val billingClient: BillingClient = BillingClient.newBuilder(context)
         .setListener(listener)
-        .enablePendingPurchases(PendingPurchasesParams.newBuilder().build())
+        .enablePendingPurchases(PendingPurchasesParams.newBuilder().enableOneTimeProducts().build())
+        .apply {
+            if (BuildConfig.ALTERNATIVE_BILLING_ENABLED) {
+                enableUserChoiceBilling { details ->
+                    mainHandler.post { onAlternativeBilling(details.externalTransactionToken) }
+                }
+            }
+        }
         .build()
 
     fun connect() {

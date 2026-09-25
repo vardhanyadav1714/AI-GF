@@ -42,6 +42,13 @@ class MainActivity : ComponentActivity() {
     private val playBilling: PlayBillingManager by lazy {
         PlayBillingManager(
             context = this,
+            onAlternativeBilling = { token ->
+                lifecycleScope.launch {
+                    controller.startPremiumSubscription(token)?.let { url ->
+                        startActivity(Intent(Intent.ACTION_VIEW, android.net.Uri.parse(url)))
+                    }
+                }
+            },
             onPurchased = { purchaseToken, productId ->
                 lifecycleScope.launch {
                     val verified = controller.verifyGooglePlayPurchase(purchaseToken, productId)
@@ -212,6 +219,5 @@ class MainActivity : ComponentActivity() {
         }
     }
 }
-
 
 

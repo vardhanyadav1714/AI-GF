@@ -163,7 +163,7 @@ class EvaAppController @Inject constructor(
         return true
     }
 
-    suspend fun startPremiumSubscription(): String? {
+    suspend fun startPremiumSubscription(externalTransactionToken: String? = null): String? {
         if (subscriptionBusy) return null
         if (authState !is AuthState.SignedIn) {
             notice = "Sign in before starting premium."
@@ -172,7 +172,7 @@ class EvaAppController @Inject constructor(
         subscriptionBusy = true
         var checkoutUrl: String? = null
         runCatching {
-            api.startSubscription()
+            api.startSubscription(externalTransactionToken)
         }.onSuccess { checkout ->
             subscriptionState = checkout.subscription
             checkoutUrl = checkout.checkoutUrl.ifBlank { checkout.subscription.checkoutUrl }
@@ -280,11 +280,13 @@ class EvaAppController @Inject constructor(
         authBusy = false
     }
 
-    suspend fun saveDateOfBirth(dateOfBirth: String): Boolean {
+    suspend fun saveDateOfBirth(dateOfBirth: String, preferredName: String = ""): Boolean {
         if (authState !is AuthState.SignedIn) return false
+        if (authBusy) return false
+        authBusy = true
         var saved = false
         runCatching {
-            api.updateProfile(displayName = null, preferredName = null, occupation = null, dateOfBirth = dateOfBirth)
+            api.updateProfile(displayName = null, preferredName = preferredName.takeIf { it.isNotBlank() }, occupation = null, dateOfBirth = dateOfBirth)
         }.onSuccess { user ->
             authState = AuthState.SignedIn(user)
             needsDateOfBirth = false
@@ -293,6 +295,7 @@ class EvaAppController @Inject constructor(
         }.onFailure { error ->
             notice = error.cleanMessage("Could not save your birthday.")
         }
+        authBusy = false
         return saved
     }
 
