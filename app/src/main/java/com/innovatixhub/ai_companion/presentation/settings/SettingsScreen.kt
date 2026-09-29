@@ -63,7 +63,6 @@ import com.eva.ai.presentation.call.*
 import com.eva.ai.presentation.chat.*
 import com.eva.ai.presentation.components.*
 import com.eva.ai.presentation.home.*
-import com.eva.ai.presentation.memories.*
 import com.eva.ai.presentation.premium.*
 import com.eva.ai.presentation.settings.*
 import com.eva.ai.ui.theme.AICompanionTheme
@@ -94,7 +93,7 @@ fun PersonalityModePicker(
                 Column(Modifier.weight(1f)) {
                     Text(
                         "AI personality",
-                        fontWeight = FontWeight.Black,
+                        fontWeight = FontWeight.Bold,
                         fontSize = 17.sp
                     )
                     Spacer(Modifier.height(4.dp))
@@ -159,7 +158,7 @@ fun PersonalityModeChip(
             Text(
                 style.label,
                 fontSize = 13.sp,
-                fontWeight = FontWeight.Black,
+                fontWeight = FontWeight.Bold,
                 maxLines = 1
             )
         }
@@ -205,12 +204,12 @@ fun ProfileScreen(controller: EvaAppController, user: EvaUser, scope: CoroutineS
                         "Profile",
                         color = evaText(),
                         fontSize = 26.sp,
-                        fontWeight = FontWeight.Black
+                        fontWeight = FontWeight.ExtraBold
                     )
                     Spacer(Modifier.weight(1f))
                     IconGlassButton(
                         icon = if (controller.lightMode) Icons.Rounded.LightMode else Icons.Rounded.DarkMode,
-                        onClick = { controller.lightMode = !controller.lightMode }
+                        onClick = { controller.applyLightMode(!controller.lightMode) }
                     )
                 }
             }
@@ -232,14 +231,14 @@ fun ProfileScreen(controller: EvaAppController, user: EvaUser, scope: CoroutineS
                                 initials,
                                 color = Color.White,
                                 fontSize = 26.sp,
-                                fontWeight = FontWeight.Black
+                                fontWeight = FontWeight.Bold
                             )
                         }
                         Column(modifier = Modifier.weight(1f)) {
                             Text(
                                 displayName,
                                 fontSize = 24.sp,
-                                fontWeight = FontWeight.Black,
+                                fontWeight = FontWeight.Bold,
                                 maxLines = 1
                             )
                             Spacer(Modifier.height(4.dp))
@@ -283,7 +282,7 @@ fun ProfileScreen(controller: EvaAppController, user: EvaUser, scope: CoroutineS
                                                 "Free plan"
                                             },
                                             fontSize = 12.sp,
-                                            fontWeight = FontWeight.Black
+                                            fontWeight = FontWeight.Bold
                                         )
                                     }
                                 }
@@ -302,7 +301,7 @@ fun ProfileScreen(controller: EvaAppController, user: EvaUser, scope: CoroutineS
                                             modifier = Modifier.size(16.dp)
                                         )
                                         Spacer(Modifier.width(6.dp))
-                                        Text("Chat", fontSize = 12.sp, fontWeight = FontWeight.Black)
+                                        Text("Chat", fontSize = 12.sp, fontWeight = FontWeight.Bold)
                                     }
                                 }
                             }
@@ -326,7 +325,7 @@ fun ProfileScreen(controller: EvaAppController, user: EvaUser, scope: CoroutineS
             item {
                 GlassCard {
                     Column {
-                        Text("About ${companion.name}", fontWeight = FontWeight.Black, fontSize = 16.sp)
+                        Text("About ${companion.name}", fontWeight = FontWeight.Bold, fontSize = 16.sp)
                         Spacer(Modifier.height(8.dp))
                         Text(
                             companion.about,
@@ -351,10 +350,17 @@ fun ProfileScreen(controller: EvaAppController, user: EvaUser, scope: CoroutineS
                                 tint = EvaColors.Pink
                             )
                             Spacer(Modifier.width(14.dp))
-                            Text("Light mode", fontWeight = FontWeight.Black, modifier = Modifier.weight(1f))
+                            Text("Light mode", fontWeight = FontWeight.SemiBold, modifier = Modifier.weight(1f))
                             Switch(
                                 checked = controller.lightMode,
-                                onCheckedChange = { controller.lightMode = it }
+                                onCheckedChange = { controller.applyLightMode(it) },
+                                colors = SwitchDefaults.colors(
+                                    checkedThumbColor = Color.White,
+                                    checkedTrackColor = EvaColors.Pink,
+                                    uncheckedThumbColor = evaMuted(),
+                                    uncheckedTrackColor = evaGlass(),
+                                    uncheckedBorderColor = evaBorder()
+                                )
                             )
                         }
                         ProfileRow(Icons.Rounded.PersonOutline, "Signed in as", user.email.ifBlank { "Email unavailable" })
@@ -383,7 +389,7 @@ fun ProfileEditor(controller: EvaAppController, user: EvaUser, scope: CoroutineS
             Row(verticalAlignment = Alignment.CenterVertically) {
                 Icon(Icons.Rounded.Edit, contentDescription = null, tint = EvaColors.Pink, modifier = Modifier.size(16.dp))
                 Spacer(Modifier.width(8.dp))
-                Text("Edit profile", fontWeight = FontWeight.Black, fontSize = 15.sp)
+                Text("Edit profile", fontWeight = FontWeight.Bold, fontSize = 15.sp)
             }
             Spacer(Modifier.height(10.dp))
             OutlinedTextField(
@@ -410,12 +416,18 @@ fun ProfileEditor(controller: EvaAppController, user: EvaUser, scope: CoroutineS
                 modifier = Modifier.fillMaxWidth()
             )
             Spacer(Modifier.height(10.dp))
-            Text(
-                if (saving) "Saving..." else "Save profile",
-                color = EvaColors.Pink,
-                fontWeight = FontWeight.ExtraBold,
+            Box(
                 modifier = Modifier
                     .fillMaxWidth()
+                    .clip(RoundedCornerShape(16.dp))
+                    .background(
+                        if (saving || editName.isBlank()) {
+                            if (isEvaLight()) Color.Black.copy(alpha = 0.06f)
+                            else Color.White.copy(alpha = 0.08f)
+                        } else {
+                            EvaColors.Pink.copy(alpha = 0.16f)
+                        }
+                    )
                     .clickable(enabled = !saving && editName.isNotBlank()) {
                         scope.launch {
                             saving = true
@@ -427,7 +439,15 @@ fun ProfileEditor(controller: EvaAppController, user: EvaUser, scope: CoroutineS
                             saving = false
                         }
                     }
-            )
+                    .padding(vertical = 13.dp),
+                contentAlignment = Alignment.Center
+            ) {
+                Text(
+                    if (saving) "Saving..." else "Save profile",
+                    color = if (saving || editName.isBlank()) evaMuted() else EvaColors.Pink,
+                    fontWeight = FontWeight.Bold
+                )
+            }
         }
     }
 }

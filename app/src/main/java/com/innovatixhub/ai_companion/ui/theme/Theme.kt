@@ -1,66 +1,81 @@
 package com.eva.ai.ui.theme
 
-import android.app.Activity
-import android.os.Build
 import androidx.compose.foundation.isSystemInDarkTheme
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.Shapes
 import androidx.compose.material3.darkColorScheme
-import androidx.compose.material3.dynamicDarkColorScheme
-import androidx.compose.material3.dynamicLightColorScheme
 import androidx.compose.material3.lightColorScheme
 import androidx.compose.runtime.Composable
-import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.unit.dp
 
 private val DarkColorScheme = darkColorScheme(
-    primary = Purple80,
-    secondary = PurpleGrey80,
-    tertiary = Pink80,
-    background = androidx.compose.ui.graphics.Color(0xFF050509),
-    surface = androidx.compose.ui.graphics.Color(0xFF151219),
-    onBackground = androidx.compose.ui.graphics.Color.White,
-    onSurface = androidx.compose.ui.graphics.Color.White
+    primary = EvaPink,
+    onPrimary = Color.White,
+    primaryContainer = EvaPurple.copy(alpha = 0.24f),
+    onPrimaryContainer = Color.White,
+    secondary = EvaPurple,
+    onSecondary = Color.White,
+    tertiary = EvaCoral,
+    onTertiary = Color.White,
+    error = EvaDanger,
+    onError = Color.White,
+    background = EvaInk,
+    onBackground = Color.White,
+    surface = EvaInkRaised,
+    onSurface = Color.White,
+    surfaceVariant = EvaInkHigh,
+    onSurfaceVariant = Color.White.copy(alpha = 0.72f),
+    outline = Color.White.copy(alpha = 0.14f),
+    outlineVariant = Color.White.copy(alpha = 0.08f),
+    inverseSurface = Color(0xFFF7EFF8),
+    inverseOnSurface = EvaOnDark
 )
 
 private val LightColorScheme = lightColorScheme(
-    primary = Purple40,
-    secondary = PurpleGrey40,
-    tertiary = Pink40,
-    background = androidx.compose.ui.graphics.Color(0xFFF9F5FA),
-    surface = androidx.compose.ui.graphics.Color.White,
-    onBackground = androidx.compose.ui.graphics.Color(0xFF17101B),
-    onSurface = androidx.compose.ui.graphics.Color(0xFF17101B)
-
-    /* Other default colors to override
-    background = Color(0xFFFFFBFE),
-    surface = Color(0xFFFFFBFE),
+    primary = EvaPink,
     onPrimary = Color.White,
+    primaryContainer = EvaPink.copy(alpha = 0.14f),
+    onPrimaryContainer = EvaOnDark,
+    secondary = EvaPurple,
     onSecondary = Color.White,
+    tertiary = EvaCoral,
     onTertiary = Color.White,
-    onBackground = Color(0xFF1C1B1F),
-    onSurface = Color(0xFF1C1B1F),
-    */
+    error = EvaDanger,
+    onError = Color.White,
+    background = EvaMist,
+    onBackground = EvaOnDark,
+    surface = EvaMistRaised,
+    onSurface = EvaOnDark,
+    surfaceVariant = Color(0xFFF3EAF6),
+    onSurfaceVariant = EvaMutedOnDark,
+    outline = Color.Black.copy(alpha = 0.12f),
+    outlineVariant = Color.Black.copy(alpha = 0.08f),
+    inverseSurface = EvaOnDark,
+    inverseOnSurface = Color.White
+)
+
+private val EvaShapes = Shapes(
+    extraSmall = RoundedCornerShape(10.dp),
+    small = RoundedCornerShape(14.dp),
+    medium = RoundedCornerShape(18.dp),
+    large = RoundedCornerShape(24.dp),
+    extraLarge = RoundedCornerShape(28.dp)
 )
 
 @Composable
 fun AICompanionTheme(
     darkTheme: Boolean = isSystemInDarkTheme(),
-    // Dynamic color is available on Android 12+
     dynamicColor: Boolean = false,
     content: @Composable () -> Unit
 ) {
-    val colorScheme = when {
-        dynamicColor && Build.VERSION.SDK_INT >= Build.VERSION_CODES.S -> {
-            val context = LocalContext.current
-            if (darkTheme) dynamicDarkColorScheme(context) else dynamicLightColorScheme(context)
-        }
-
-        darkTheme -> DarkColorScheme
-        else -> LightColorScheme
-    }
+    val colorScheme = if (darkTheme) DarkColorScheme else LightColorScheme
 
     MaterialTheme(
         colorScheme = colorScheme,
         typography = Typography,
+        shapes = EvaShapes,
         content = content
     )
 }

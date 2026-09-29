@@ -63,7 +63,6 @@ import com.eva.ai.presentation.call.*
 import com.eva.ai.presentation.chat.*
 import com.eva.ai.presentation.components.*
 import com.eva.ai.presentation.home.*
-import com.eva.ai.presentation.memories.*
 import com.eva.ai.presentation.premium.*
 import com.eva.ai.presentation.settings.*
 import com.eva.ai.ui.theme.AICompanionTheme

@@ -63,7 +63,6 @@ import com.eva.ai.presentation.call.*
 import com.eva.ai.presentation.chat.*
 import com.eva.ai.presentation.components.*
 import com.eva.ai.presentation.home.*
-import com.eva.ai.presentation.memories.*
 import com.eva.ai.presentation.premium.*
 import com.eva.ai.presentation.settings.*
 import com.eva.ai.ui.theme.AICompanionTheme
@@ -93,6 +92,8 @@ fun HomeScreen(
     onQuickMessage: (String) -> Unit,
     onVoiceNotes: () -> Unit
 ) {
+    val hapticTick = rememberEvaHaptic()
+
     EvaPage {
         LazyColumn(
             modifier = Modifier
@@ -107,7 +108,7 @@ fun HomeScreen(
                         "Eva",
                         color = evaText(),
                         fontSize = 19.sp,
-                        fontWeight = FontWeight.Black
+                        fontWeight = FontWeight.Bold
                     )
                     Spacer(Modifier.weight(1f))
                     IconGlassButton(
@@ -121,7 +122,7 @@ fun HomeScreen(
             item {
                 Column {
                     Text(
-                        "Hi ${user.name.ifBlank { "Vardhan" }}",
+                        "Hi ${user.name.ifBlank { "there" }}",
                         color = evaMuted(),
                         fontSize = 17.sp,
                         fontWeight = FontWeight.ExtraBold
@@ -132,7 +133,7 @@ fun HomeScreen(
                         color = evaText(),
                         fontSize = 36.sp,
                         lineHeight = 38.sp,
-                        fontWeight = FontWeight.Black
+                        fontWeight = FontWeight.ExtraBold
                     )
                     Text(
                         companion.subtitle,
@@ -145,7 +146,10 @@ fun HomeScreen(
             item {
                 HomeCompanionRail(
                     selected = companion,
-                    onSelect = onCompanionSelect
+                    onSelect = { profile ->
+                        hapticTick()
+                        onCompanionSelect(profile)
+                    }
                 )
             }
             item {
@@ -168,7 +172,10 @@ fun HomeScreen(
                 }
             }
             item {
-                MoodPanel(onQuickMessage)
+                MoodPanel { message ->
+                    hapticTick()
+                    onQuickMessage(message)
+                }
             }
         }
     }
@@ -186,7 +193,7 @@ fun HomeCompanionRail(
                     "Choose your companion",
                     color = evaText(),
                     fontSize = 16.sp,
-                    fontWeight = FontWeight.Black
+                    fontWeight = FontWeight.Bold
                 )
                 Spacer(Modifier.height(3.dp))
                 Text(
@@ -199,7 +206,7 @@ fun HomeCompanionRail(
                 selected.personality.substringBefore(","),
                 color = EvaColors.Pink,
                 fontSize = 12.sp,
-                fontWeight = FontWeight.Black,
+                fontWeight = FontWeight.Bold,
                 maxLines = 1
             )
         }
@@ -273,7 +280,7 @@ fun HomeCompanionCard(
                 profile.name,
                 color = evaText(),
                 fontSize = 14.sp,
-                fontWeight = FontWeight.Black,
+                fontWeight = FontWeight.Bold,
                 maxLines = 1
             )
             Spacer(Modifier.height(3.dp))
@@ -327,7 +334,7 @@ fun HeroImageCard(companion: CompanionProfile, onChat: () -> Unit) {
                 color = Color.White,
                 fontSize = 18.sp,
                 lineHeight = 23.sp,
-                fontWeight = FontWeight.Black
+                fontWeight = FontWeight.Bold
             )
             Spacer(Modifier.height(14.dp))
             GradientButton(
@@ -365,7 +372,7 @@ fun HomeAction(
                 color = evaText(),
                 fontSize = 11.sp,
                 lineHeight = 12.sp,
-                fontWeight = FontWeight.Black,
+                fontWeight = FontWeight.Bold,
                 maxLines = 1,
                 overflow = TextOverflow.Ellipsis
             )
@@ -387,7 +394,7 @@ fun MoodPanel(onQuickMessage: (String) -> Unit) {
         radius = 22.dp
     ) {
         Column {
-            Text("Today's Mood", color = evaText(), fontWeight = FontWeight.Black, fontSize = 17.sp)
+            Text("Today's Mood", color = evaText(), fontWeight = FontWeight.Bold, fontSize = 17.sp)
             Spacer(Modifier.height(4.dp))
             Text("How are you feeling today?", color = evaMuted(), fontSize = 13.sp)
             Spacer(Modifier.height(13.dp))

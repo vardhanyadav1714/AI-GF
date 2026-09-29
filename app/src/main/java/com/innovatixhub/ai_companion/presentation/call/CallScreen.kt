@@ -63,7 +63,6 @@ import com.eva.ai.presentation.call.*
 import com.eva.ai.presentation.chat.*
 import com.eva.ai.presentation.components.*
 import com.eva.ai.presentation.home.*
-import com.eva.ai.presentation.memories.*
 import com.eva.ai.presentation.premium.*
 import com.eva.ai.presentation.settings.*
 import com.eva.ai.ui.theme.AICompanionTheme
@@ -97,6 +96,7 @@ fun CallScreen(
     var recording by remember { mutableStateOf(false) }
     var recordingStartedAt by remember { mutableStateOf(0L) }
     var speaker by remember { mutableStateOf(true) }
+    val hapticTick = rememberEvaHaptic()
     val callStatus = when {
         controller.sending -> "${companion.name} is replying"
         recording -> "Listening to you"
@@ -213,7 +213,7 @@ fun CallScreen(
                     modifier = Modifier.weight(1f),
                     horizontalAlignment = Alignment.CenterHorizontally
                 ) {
-                    Text(companion.name, color = Color.White, fontSize = 24.sp, fontWeight = FontWeight.Black)
+                    Text(companion.name, color = Color.White, fontSize = 24.sp, fontWeight = FontWeight.ExtraBold)
                     Text(formatDuration(callSeconds), color = Color.White.copy(alpha = 0.78f), fontSize = 15.sp)
                 }
                 IconGlassButton(
@@ -231,7 +231,7 @@ fun CallScreen(
             ) {
                 CallAvatar(companion = companion, active = recording || controller.sending)
                 Spacer(Modifier.height(20.dp))
-                Text(companion.name, color = Color.White, fontSize = 34.sp, fontWeight = FontWeight.Black)
+                Text(companion.name, color = Color.White, fontSize = 34.sp, fontWeight = FontWeight.ExtraBold)
                 Spacer(Modifier.height(8.dp))
                 CallStatusPill(status = callStatus, active = recording || controller.sending)
                 Spacer(Modifier.height(16.dp))
@@ -276,8 +276,11 @@ fun CallScreen(
                         modifier = Modifier
                             .size(78.dp)
                             .clip(CircleShape)
-                            .background(Color(0xFFE53945))
-                            .clickable { onClose() },
+                            .background(EvaColors.Danger)
+                            .clickable {
+                                hapticTick()
+                                onClose()
+                            },
                         contentAlignment = Alignment.Center
                     ) {
                         Icon(
@@ -343,14 +346,13 @@ fun CallStatusPill(status: String, active: Boolean) {
             .padding(horizontal = 14.dp, vertical = 8.dp),
         verticalAlignment = Alignment.CenterVertically
     ) {
-        Box(
-            modifier = Modifier
-                .size(8.dp)
-                .clip(CircleShape)
-                .background(if (active) EvaColors.Pink else EvaColors.Green)
+        PulsingDot(
+            color = if (active) EvaColors.Pink else EvaColors.Green,
+            size = 8.dp,
+            pulse = active
         )
         Spacer(Modifier.width(8.dp))
-        Text(status, color = Color.White, fontSize = 13.sp, fontWeight = FontWeight.Black)
+        Text(status, color = Color.White, fontSize = 13.sp, fontWeight = FontWeight.Bold)
     }
 }
 

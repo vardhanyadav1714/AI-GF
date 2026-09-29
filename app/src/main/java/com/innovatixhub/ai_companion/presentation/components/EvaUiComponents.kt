@@ -1,6 +1,19 @@
 package com.eva.ai.presentation.components
 
 import android.text.format.DateFormat
+import android.view.HapticFeedbackConstants
+import androidx.compose.animation.animateColorAsState
+import androidx.compose.animation.core.FastOutSlowInEasing
+import androidx.compose.animation.core.LinearEasing
+import androidx.compose.animation.core.RepeatMode
+import androidx.compose.animation.core.Spring
+import androidx.compose.animation.core.StartOffset
+import androidx.compose.animation.core.animateFloat
+import androidx.compose.animation.core.animateFloatAsState
+import androidx.compose.animation.core.infiniteRepeatable
+import androidx.compose.animation.core.rememberInfiniteTransition
+import androidx.compose.animation.core.spring
+import androidx.compose.animation.core.tween
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
@@ -27,13 +40,10 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.KeyboardActions
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.rounded.Chat
-import androidx.compose.material.icons.rounded.ChatBubbleOutline
 import androidx.compose.material.icons.rounded.ChevronRight
-import androidx.compose.material.icons.rounded.Favorite
+import androidx.compose.material.icons.rounded.ChatBubbleOutline
 import androidx.compose.material.icons.rounded.Home
 import androidx.compose.material.icons.rounded.PersonOutline
-import androidx.compose.material.icons.rounded.RecordVoiceOver
 import androidx.compose.material.icons.rounded.WorkspacePremium
 import androidx.compose.material3.Icon
 import androidx.compose.material3.LocalContentColor
@@ -43,17 +53,22 @@ import androidx.compose.material3.Text
 import androidx.compose.material3.TextFieldDefaults
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.CompositionLocalProvider
+import androidx.compose.runtime.getValue
 import androidx.compose.runtime.compositionLocalOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.draw.drawBehind
+import androidx.compose.ui.draw.scale
 import androidx.compose.ui.focus.onFocusEvent
+import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.platform.LocalView
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.ImeAction
@@ -64,22 +79,33 @@ import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.eva.ai.domain.model.EvaTab
+import com.eva.ai.ui.theme.EvaInk
+import com.eva.ai.ui.theme.EvaInkHigh
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import java.util.Calendar
 import java.util.Date
 
 object EvaColors {
-    val Black = Color(0xFF050509)
-    val Pink = Color(0xFFFF3BB4)
-    val Purple = Color(0xFF8E35F2)
-    val Coral = Color(0xFFFF5E70)
-    val Gold = Color(0xFFFFC044)
-    val Green = Color(0xFF2EE582)
+    val Black = EvaInk
+    val Pink = com.eva.ai.ui.theme.EvaPink
+    val Purple = com.eva.ai.ui.theme.EvaPurple
+    val Coral = com.eva.ai.ui.theme.EvaCoral
+    val Gold = com.eva.ai.ui.theme.EvaGold
+    val Green = com.eva.ai.ui.theme.EvaGreen
+    val Danger = com.eva.ai.ui.theme.EvaDanger
+    val Ink = EvaInk
+    val InkHigh = EvaInkHigh
     val Gradient = Brush.linearGradient(listOf(Purple, Pink, Coral))
 }
 
 val LocalEvaLightMode = compositionLocalOf { false }
+
+@Composable
+fun isEvaLight(): Boolean = LocalEvaLightMode.current
+
+// ── Page scaffold ────────────────────────────────────────────────────────────
+
 @Composable
 fun EvaPage(
     backgroundImage: Int? = null,
@@ -109,6 +135,25 @@ fun EvaPage(
                         )
                     )
             )
+            // Ambient brand glow: a single soft radial wash behind the content,
+            // the calm "AI presence" cue. Kept subtle so text contrast holds.
+            val ambientGlowAlpha = if (isEvaLight()) 0.07f else 0.16f
+            Box(
+                modifier = Modifier
+                    .fillMaxSize()
+                    .drawBehind {
+                        drawRect(
+                            Brush.radialGradient(
+                                colors = listOf(
+                                    EvaColors.Purple.copy(alpha = ambientGlowAlpha),
+                                    Color.Transparent
+                                ),
+                                center = Offset(size.width / 2f, 0f),
+                                radius = size.width * 1.05f
+                            )
+                        )
+                    }
+            )
             Box(Modifier.fillMaxSize()) {
                 content()
             }
@@ -116,11 +161,13 @@ fun EvaPage(
     }
 }
 
+// ── Surfaces & buttons ───────────────────────────────────────────────────────
+
 @Composable
 fun GlassCard(
     modifier: Modifier = Modifier,
     padding: PaddingValues = PaddingValues(16.dp),
-    radius: Dp = 18.dp,
+    radius: Dp = 20.dp,
     glassOverride: Color? = null,
     borderOverride: Color? = null,
     content: @Composable () -> Unit
@@ -153,10 +200,10 @@ fun IconGlassButton(
             .size(size)
             .clickable(onClick = onClick),
         padding = PaddingValues(0.dp),
-        radius = 18.dp
+        radius = size / 2
     ) {
         Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
-            Icon(icon, contentDescription = null, tint = color, modifier = Modifier.size(size * 0.52f))
+            Icon(icon, contentDescription = null, tint = color, modifier = Modifier.size(size * 0.5f))
         }
     }
 }
@@ -168,6 +215,11 @@ fun GradientButton(
     enabled: Boolean = true,
     onClick: () -> Unit
 ) {
+    val disabledFill = if (isEvaLight()) {
+        Color.Black.copy(alpha = 0.06f)
+    } else {
+        Color.White.copy(alpha = 0.08f)
+    }
     Surface(
         modifier = Modifier
             .fillMaxWidth()
@@ -181,22 +233,32 @@ fun GradientButton(
         Row(
             modifier = Modifier
                 .fillMaxSize()
-                .background(
-                    if (enabled) EvaColors.Gradient
-                    else Brush.linearGradient(listOf(Color.Gray, Color.DarkGray))
-                ),
+                .background(if (enabled) EvaColors.Gradient else Brush.linearGradient(listOf(disabledFill, disabledFill))),
             horizontalArrangement = Arrangement.Center,
             verticalAlignment = Alignment.CenterVertically
         ) {
-            Icon(icon, contentDescription = null, tint = Color.White, modifier = Modifier.size(21.dp))
+            Icon(
+                icon,
+                contentDescription = null,
+                tint = if (enabled) Color.White else evaMuted(),
+                modifier = Modifier.size(21.dp)
+            )
             Spacer(Modifier.width(10.dp))
-            Text(label, color = Color.White, fontSize = 17.sp, fontWeight = FontWeight.Black)
+            Text(
+                label,
+                color = if (enabled) Color.White else evaMuted(),
+                fontSize = 17.sp,
+                fontWeight = FontWeight.ExtraBold
+            )
         }
     }
 }
 
+// ── Bottom navigation ────────────────────────────────────────────────────────
+
 @Composable
 fun EvaBottomNav(active: EvaTab, onSelect: (EvaTab) -> Unit) {
+    val hapticTick = rememberEvaHaptic()
     val items = listOf(
         Triple(EvaTab.Home, Icons.Rounded.Home, "Home"),
         Triple(EvaTab.Chat, Icons.Rounded.ChatBubbleOutline, "Chat"),
@@ -209,21 +271,34 @@ fun EvaBottomNav(active: EvaTab, onSelect: (EvaTab) -> Unit) {
             .navigationBarsPadding()
             .padding(start = 18.dp, end = 18.dp, bottom = 8.dp),
         padding = PaddingValues(horizontal = 5.dp, vertical = 5.dp),
-        radius = 22.dp
+        radius = 24.dp
     ) {
         Row {
             items.forEach { item ->
                 val selected = active == item.first
+                val pillColor by animateColorAsState(
+                    targetValue = if (selected) EvaColors.Pink.copy(alpha = 0.16f) else Color.Transparent,
+                    animationSpec = tween(durationMillis = 220, easing = FastOutSlowInEasing),
+                    label = "nav-pill-${item.third}"
+                )
+                val iconScale by animateFloatAsState(
+                    targetValue = if (selected) 1.12f else 1f,
+                    animationSpec = spring(
+                        dampingRatio = Spring.DampingRatioMediumBouncy,
+                        stiffness = Spring.StiffnessMedium
+                    ),
+                    label = "nav-scale-${item.third}"
+                )
                 Column(
                     modifier = Modifier
                         .weight(1f)
-                        .height(46.dp)
-                        .clip(RoundedCornerShape(16.dp))
-                        .background(
-                            if (selected) EvaColors.Pink.copy(alpha = 0.16f)
-                            else Color.Transparent
-                        )
-                        .clickable { onSelect(item.first) },
+                        .height(48.dp)
+                        .clip(RoundedCornerShape(18.dp))
+                        .background(pillColor)
+                        .clickable {
+                            hapticTick()
+                            onSelect(item.first)
+                        },
                     verticalArrangement = Arrangement.Center,
                     horizontalAlignment = Alignment.CenterHorizontally
                 ) {
@@ -231,15 +306,17 @@ fun EvaBottomNav(active: EvaTab, onSelect: (EvaTab) -> Unit) {
                         item.second,
                         contentDescription = item.third,
                         tint = if (selected) EvaColors.Pink else evaMuted(),
-                        modifier = Modifier.size(20.dp)
+                        modifier = Modifier
+                            .size(21.dp)
+                            .scale(iconScale)
                     )
                     Spacer(Modifier.height(2.dp))
                     Text(
                         item.third,
                         color = if (selected) EvaColors.Pink else evaMuted(),
-                        fontSize = 10.sp,
+                        fontSize = 10.5.sp,
                         lineHeight = 12.sp,
-                        fontWeight = FontWeight.Black,
+                        fontWeight = FontWeight.Bold,
                         maxLines = 1
                     )
                 }
@@ -247,6 +324,150 @@ fun EvaBottomNav(active: EvaTab, onSelect: (EvaTab) -> Unit) {
         }
     }
 }
+
+// ── Motion components ────────────────────────────────────────────────────────
+
+/** Three softly breathing dots. The "companion is thinking" cue. */
+@Composable
+fun TypingIndicator(
+    modifier: Modifier = Modifier,
+    color: Color = evaMuted()
+) {
+    val transition = rememberInfiniteTransition(label = "typing")
+    Row(
+        modifier = modifier,
+        horizontalArrangement = Arrangement.spacedBy(4.dp),
+        verticalAlignment = Alignment.CenterVertically
+    ) {
+        repeat(3) { index ->
+            val alpha by transition.animateFloat(
+                initialValue = 0.25f,
+                targetValue = 1f,
+                animationSpec = infiniteRepeatable(
+                    animation = tween(durationMillis = 420, easing = LinearEasing),
+                    repeatMode = RepeatMode.Reverse,
+                    initialStartOffset = StartOffset(index * 170)
+                ),
+                label = "typing-dot-$index"
+            )
+            Box(
+                Modifier
+                    .size(7.dp)
+                    .clip(CircleShape)
+                    .background(color.copy(alpha = alpha))
+            )
+        }
+    }
+}
+
+/** Status dot with a gentle halo pulse while the connection is live. */
+@Composable
+fun PulsingDot(
+    color: Color,
+    modifier: Modifier = Modifier,
+    size: Dp = 8.dp,
+    pulse: Boolean = true
+) {
+    if (!pulse) {
+        Box(
+            modifier
+                .size(size)
+                .clip(CircleShape)
+                .background(color)
+        )
+        return
+    }
+    val transition = rememberInfiniteTransition(label = "pulse")
+    val halo by transition.animateFloat(
+        initialValue = 1f,
+        targetValue = 2.2f,
+        animationSpec = infiniteRepeatable(
+            animation = tween(durationMillis = 1300, easing = FastOutSlowInEasing),
+            repeatMode = RepeatMode.Restart
+        ),
+        label = "pulse-halo"
+    )
+    val haloAlpha by transition.animateFloat(
+        initialValue = 0.28f,
+        targetValue = 0f,
+        animationSpec = infiniteRepeatable(
+            animation = tween(durationMillis = 1300, easing = FastOutSlowInEasing),
+            repeatMode = RepeatMode.Restart
+        ),
+        label = "pulse-alpha"
+    )
+    Box(
+        modifier.size(size * 2.4f),
+        contentAlignment = Alignment.Center
+    ) {
+        Box(
+            Modifier
+                .size(size * halo)
+                .clip(CircleShape)
+                .background(color.copy(alpha = haloAlpha))
+        )
+        Box(
+            Modifier
+                .size(size)
+                .clip(CircleShape)
+                .background(color)
+        )
+    }
+}
+
+/** Voice waveform whose bars breathe while recording or preparing to send. */
+@Composable
+fun AnimatedWaveform(
+    color: Color,
+    modifier: Modifier = Modifier,
+    barCount: Int = 12,
+    height: Dp = 22.dp
+) {
+    val transition = rememberInfiniteTransition(label = "waveform")
+    Row(
+        modifier = modifier.height(height),
+        verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.spacedBy(3.dp)
+    ) {
+        repeat(barCount) { index ->
+            val scale by transition.animateFloat(
+                initialValue = 0.3f,
+                targetValue = 1f,
+                animationSpec = infiniteRepeatable(
+                    animation = tween(
+                        durationMillis = 480 + (index % 4) * 90,
+                        easing = FastOutSlowInEasing
+                    ),
+                    repeatMode = RepeatMode.Reverse,
+                    initialStartOffset = StartOffset(index * 65)
+                ),
+                label = "wave-bar-$index"
+            )
+            Box(
+                Modifier
+                    .width(3.dp)
+                    .height((height * (0.28f + 0.72f * scale)))
+                    .clip(RoundedCornerShape(3.dp))
+                    .background(color)
+            )
+        }
+    }
+}
+
+// ── Haptics ──────────────────────────────────────────────────────────────────
+
+/** Light, consistent tick used for sends, selections and record start/stop. */
+@Composable
+fun rememberEvaHaptic(): () -> Unit {
+    val view = LocalView.current
+    return remember(view) {
+        {
+            view.performHapticFeedback(HapticFeedbackConstants.VIRTUAL_KEY)
+        }
+    }
+}
+
+// ── Small shared pieces ──────────────────────────────────────────────────────
 
 @Composable
 fun DateChip(label: String) {
@@ -261,93 +482,6 @@ fun DateChip(label: String) {
 }
 
 @Composable
-fun VoiceMemoryTile(modifier: Modifier = Modifier) {
-    GlassCard(modifier = modifier.height(148.dp)) {
-        Column(
-            modifier = Modifier.fillMaxSize(),
-            verticalArrangement = Arrangement.SpaceBetween
-        ) {
-            Box(
-                modifier = Modifier
-                    .size(52.dp)
-                    .clip(CircleShape)
-                    .background(EvaColors.Pink.copy(alpha = 0.14f)),
-                contentAlignment = Alignment.Center
-            ) {
-                Icon(
-                    Icons.Rounded.RecordVoiceOver,
-                    contentDescription = null,
-                    tint = EvaColors.Pink,
-                    modifier = Modifier.size(27.dp)
-                )
-            }
-            Column {
-                Text("Voice Notes", fontWeight = FontWeight.Black, fontSize = 15.sp)
-                Spacer(Modifier.height(5.dp))
-                Text("3 saved", color = evaMuted(), fontSize = 12.sp, fontWeight = FontWeight.Bold)
-            }
-        }
-    }
-}
-
-@Composable
-fun MemoryTile(
-    imageRes: Int,
-    title: String,
-    icon: ImageVector,
-    height: Dp,
-    modifier: Modifier = Modifier
-) {
-    Box(
-        modifier = modifier
-            .height(height)
-            .clip(RoundedCornerShape(18.dp))
-    ) {
-        Image(
-            painter = painterResource(imageRes),
-            contentDescription = title,
-            contentScale = ContentScale.Crop,
-            modifier = Modifier.fillMaxSize()
-        )
-        Box(
-            modifier = Modifier
-                .fillMaxSize()
-                .background(
-                    Brush.verticalGradient(
-                        listOf(Color.Transparent, Color.Black.copy(alpha = 0.72f))
-                    )
-                )
-        )
-        Row(
-            modifier = Modifier
-                .align(Alignment.BottomStart)
-                .padding(14.dp),
-            verticalAlignment = Alignment.CenterVertically
-        ) {
-            Icon(icon, contentDescription = null, tint = Color.White, modifier = Modifier.size(19.dp))
-            Spacer(Modifier.width(7.dp))
-            Text(title, color = Color.White, fontWeight = FontWeight.Black)
-        }
-    }
-}
-
-@Composable
-fun NoteTile(modifier: Modifier = Modifier) {
-    GlassCard(modifier = modifier.height(148.dp)) {
-        Column(
-            modifier = Modifier.fillMaxSize(),
-            verticalArrangement = Arrangement.Bottom
-        ) {
-            Text("Late Night Talks", fontWeight = FontWeight.Black)
-            Spacer(Modifier.height(8.dp))
-            Text("8 May 2024", color = evaMuted())
-            Spacer(Modifier.height(14.dp))
-            Icon(Icons.Rounded.Chat, contentDescription = null, tint = EvaColors.Purple)
-        }
-    }
-}
-
-@Composable
 fun PremiumFeature(icon: ImageVector, title: String, body: String) {
     Row(
         modifier = Modifier.padding(vertical = 8.dp),
@@ -356,7 +490,7 @@ fun PremiumFeature(icon: ImageVector, title: String, body: String) {
         Box(
             modifier = Modifier
                 .size(42.dp)
-                .clip(RoundedCornerShape(13.dp))
+                .clip(RoundedCornerShape(14.dp))
                 .background(EvaColors.Gradient),
             contentAlignment = Alignment.Center
         ) {
@@ -364,7 +498,7 @@ fun PremiumFeature(icon: ImageVector, title: String, body: String) {
         }
         Spacer(Modifier.width(12.dp))
         Column(Modifier.weight(1f)) {
-            Text(title, fontWeight = FontWeight.Black)
+            Text(title, fontWeight = FontWeight.Bold)
             Text(body, color = evaMuted(), fontSize = 12.sp)
         }
     }
@@ -382,24 +516,24 @@ fun PriceCard(
     Column(
         modifier = modifier
             .height(130.dp)
-            .clip(RoundedCornerShape(16.dp))
+            .clip(RoundedCornerShape(18.dp))
             .background(evaGlass())
             .border(
                 width = if (selected) 2.dp else 1.dp,
                 color = if (selected) EvaColors.Pink else evaBorder(),
-                shape = RoundedCornerShape(16.dp)
+                shape = RoundedCornerShape(18.dp)
             )
             .clickable(onClick = onClick)
             .padding(12.dp),
         verticalArrangement = Arrangement.Center,
         horizontalAlignment = Alignment.CenterHorizontally
     ) {
-        Text(title, color = evaMuted(), fontWeight = FontWeight.ExtraBold, maxLines = 1)
+        Text(title, color = evaMuted(), fontWeight = FontWeight.SemiBold, maxLines = 1)
         Spacer(Modifier.height(13.dp))
         Text(
             price,
             fontSize = 17.sp,
-            fontWeight = FontWeight.Black,
+            fontWeight = FontWeight.ExtraBold,
             maxLines = 1,
             overflow = TextOverflow.Ellipsis
         )
@@ -409,7 +543,7 @@ fun PriceCard(
                 tag,
                 color = if (selected) EvaColors.Pink else evaMuted(),
                 fontSize = 11.sp,
-                fontWeight = FontWeight.Black,
+                fontWeight = FontWeight.Bold,
                 maxLines = 1
             )
         }
@@ -434,8 +568,8 @@ fun StatItem(label: String, value: String, modifier: Modifier = Modifier) {
         Spacer(Modifier.height(7.dp))
         Text(
             value,
-            fontSize = if (value.length > 7) 16.sp else 23.sp,
-            fontWeight = FontWeight.Black,
+            fontSize = if (value.length > 7) 16.sp else 22.sp,
+            fontWeight = FontWeight.ExtraBold,
             maxLines = 1,
             overflow = TextOverflow.Ellipsis
         )
@@ -463,11 +597,11 @@ fun ProfileRow(
     ) {
         Icon(icon, contentDescription = null, tint = EvaColors.Pink)
         Spacer(Modifier.width(14.dp))
-        Text(title, fontWeight = FontWeight.Black, modifier = Modifier.weight(1f))
+        Text(title, fontWeight = FontWeight.SemiBold, modifier = Modifier.weight(1f))
         Text(
             value,
             color = EvaColors.Pink,
-            fontWeight = FontWeight.ExtraBold,
+            fontWeight = FontWeight.SemiBold,
             maxLines = 1,
             overflow = TextOverflow.Ellipsis,
             modifier = Modifier.fillMaxWidth(0.44f)
@@ -499,7 +633,7 @@ fun CallAction(
         Text(
             label,
             color = Color.White,
-            fontWeight = FontWeight.ExtraBold,
+            fontWeight = FontWeight.SemiBold,
             fontSize = 12.sp,
             maxLines = 1,
             overflow = TextOverflow.Ellipsis,
@@ -556,6 +690,8 @@ fun EvaTextField(
     )
 }
 
+// ── Semantic colors ──────────────────────────────────────────────────────────
+
 @Composable
 fun evaText(): Color = if (isEvaLight()) Color(0xFF17101B) else Color.White
 
@@ -563,13 +699,13 @@ fun evaText(): Color = if (isEvaLight()) Color(0xFF17101B) else Color.White
 fun evaMuted(): Color = if (isEvaLight()) Color(0xFF6E6273) else Color.White.copy(alpha = 0.70f)
 
 @Composable
-fun evaPageTop(): Color = if (isEvaLight()) Color(0xFFFFF8FC) else EvaColors.Black
+fun evaPageTop(): Color = if (isEvaLight()) Color(0xFFFFF8FC) else EvaInk
 
 @Composable
-fun evaPageMid(): Color = if (isEvaLight()) Color(0xFFF7EFF8) else Color(0xFF120D16)
+fun evaPageMid(): Color = if (isEvaLight()) Color(0xFFF7EFF8) else Color(0xFF151020)
 
 @Composable
-fun evaPageBottom(): Color = if (isEvaLight()) Color.White else EvaColors.Black
+fun evaPageBottom(): Color = if (isEvaLight()) Color.White else EvaInk
 
 @Composable
 fun evaGlass(): Color = if (isEvaLight()) Color.White.copy(alpha = 0.72f) else Color.White.copy(alpha = 0.07f)
@@ -577,8 +713,7 @@ fun evaGlass(): Color = if (isEvaLight()) Color.White.copy(alpha = 0.72f) else C
 @Composable
 fun evaBorder(): Color = if (isEvaLight()) Color.Black.copy(alpha = 0.08f) else Color.White.copy(alpha = 0.10f)
 
-@Composable
-fun isEvaLight(): Boolean = LocalEvaLightMode.current
+// ── Formatting helpers ───────────────────────────────────────────────────────
 
 fun formatTime(millis: Long): String = DateFormat.format("H:mm", Date(millis)).toString()
 
@@ -605,6 +740,3 @@ fun formatDuration(seconds: Int): String {
     val remaining = seconds % 60
     return "$minutes:${remaining.toString().padStart(2, '0')}"
 }
-
-
-

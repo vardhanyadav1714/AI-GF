@@ -37,7 +37,7 @@ class EvaAppController @Inject constructor(
     var activeTab by mutableStateOf(EvaTab.Home)
     var premiumOpen by mutableStateOf(false)
     var callOpen by mutableStateOf(false)
-    var lightMode by mutableStateOf(false)
+    var lightMode by mutableStateOf(settingsStore.lightMode())
     var draft by mutableStateOf("")
     var sending by mutableStateOf(false)
     var backendLive by mutableStateOf(false)
@@ -621,6 +621,11 @@ class EvaAppController @Inject constructor(
         )
     }
 
+
+    fun applyLightMode(enabled: Boolean) {
+        lightMode = enabled
+        settingsStore.saveLightMode(enabled)
+    }
 
     private fun persistSelectedCompanion() {
         settingsStore.saveSelectedCompanion(selectedCompanion)

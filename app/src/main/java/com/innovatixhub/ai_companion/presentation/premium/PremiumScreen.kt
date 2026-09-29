@@ -63,7 +63,6 @@ import com.eva.ai.presentation.call.*
 import com.eva.ai.presentation.chat.*
 import com.eva.ai.presentation.components.*
 import com.eva.ai.presentation.home.*
-import com.eva.ai.presentation.memories.*
 import com.eva.ai.presentation.premium.*
 import com.eva.ai.presentation.settings.*
 import com.eva.ai.ui.theme.AICompanionTheme
@@ -116,7 +115,7 @@ fun PremiumScreen(
                         modifier = Modifier.weight(1f),
                         horizontalAlignment = Alignment.CenterHorizontally
                     ) {
-                        Text("EVA Premium", fontSize = 22.sp, fontWeight = FontWeight.Black)
+                        Text("EVA Premium", fontSize = 22.sp, fontWeight = FontWeight.ExtraBold)
                         Text("Unlock the full experience", color = evaMuted())
                     }
                     Spacer(Modifier.width(48.dp))
@@ -130,7 +129,7 @@ fun PremiumScreen(
                     modifier = Modifier
                         .fillMaxWidth()
                         .height(300.dp)
-                        .clip(RoundedCornerShape(18.dp))
+                        .clip(RoundedCornerShape(26.dp))
                 )
                 GlassCard(
                     modifier = Modifier
@@ -176,7 +175,7 @@ fun PremiumScreen(
                             Spacer(Modifier.height(10.dp))
                             Text(
                                 if (active) "Active" else "Ready",
-                                fontWeight = FontWeight.Black,
+                                fontWeight = FontWeight.Bold,
                                 fontSize = 17.sp
                             )
                             Spacer(Modifier.height(6.dp))

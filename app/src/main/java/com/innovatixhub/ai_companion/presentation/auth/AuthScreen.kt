@@ -63,7 +63,6 @@ import com.eva.ai.presentation.call.*
 import com.eva.ai.presentation.chat.*
 import com.eva.ai.presentation.components.*
 import com.eva.ai.presentation.home.*
-import com.eva.ai.presentation.memories.*
 import com.eva.ai.presentation.premium.*
 import com.eva.ai.presentation.settings.*
 import com.eva.ai.ui.theme.AICompanionTheme
@@ -165,7 +164,7 @@ fun AuthScreen(
                         fontSize = 30.sp,
                         lineHeight = 34.sp,
                         textAlign = TextAlign.Center,
-                        fontWeight = FontWeight.Black
+                        fontWeight = FontWeight.ExtraBold
                     )
                     Spacer(Modifier.height(6.dp))
                     Text(
@@ -216,7 +215,7 @@ fun AuthScreen(
                                     email = cleanEmail,
                                     code = code,
                                     busy = busy,
-                                    onCodeChange = { code = it.take(8) },
+                                    onCodeChange = { code = it.take(6) },
                                     onVerify = { onVerify(cleanEmail, code) },
                                     onBack = {
                                         codeSent = false
@@ -294,7 +293,7 @@ fun AuthModeToggle(
                 Text(
                     text = if (item == AuthMode.Login) "Sign in" else "Sign up",
                     color = if (selected) Color.White else evaMuted(),
-                    fontWeight = FontWeight.Black,
+                    fontWeight = FontWeight.Bold,
                     fontSize = 14.sp
                 )
             }
@@ -334,7 +333,7 @@ fun GoogleAuthButton(
             Text(
                 text = label,
                 color = evaText(),
-                fontWeight = FontWeight.Black,
+                fontWeight = FontWeight.Bold,
                 fontSize = 15.sp,
                 maxLines = 1,
                 overflow = TextOverflow.Ellipsis
@@ -383,7 +382,7 @@ fun EmailEntryPanel(
             text = if (mode == AuthMode.Login) "Login with email" else "Sign up with email",
             color = evaText(),
             fontSize = 18.sp,
-            fontWeight = FontWeight.Black
+            fontWeight = FontWeight.Bold
         )
         AnimatedVisibility(visible = mode == AuthMode.Signup) {
             EvaTextField(
@@ -432,7 +431,7 @@ fun CodeVerificationPanel(
                 "Enter confirmation code",
                 color = evaText(),
                 fontSize = 18.sp,
-                fontWeight = FontWeight.Black
+                fontWeight = FontWeight.Bold
             )
             Text(
                 email,
@@ -449,13 +448,13 @@ fun CodeVerificationPanel(
             keyboardType = KeyboardType.Number,
             imeAction = ImeAction.Send,
             onSend = {
-                if (code.length >= 4 && !busy) onVerify()
+                if (code.length >= 6 && !busy) onVerify()
             }
         )
         GradientButton(
             icon = Icons.Rounded.CheckCircle,
             label = if (busy) "Verifying..." else "Verify code",
-            enabled = !busy && code.length >= 4,
+            enabled = !busy && code.length >= 6,
             onClick = onVerify
         )
         Row(

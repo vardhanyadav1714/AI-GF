@@ -22,6 +22,8 @@ class EvaSettingsStore @Inject constructor(
     fun selectedReplyStyle(): ReplyStyle =
         replyStyleById(prefs.getString(KEY_SELECTED_REPLY_STYLE_ID, "natural"))
 
+    fun lightMode(): Boolean = prefs.getBoolean(KEY_LIGHT_MODE, false)
+
     fun saveSelectedCompanion(companion: CompanionProfile) {
         prefs.edit()
             .putString(KEY_SELECTED_COMPANION_ID, companion.id)
@@ -34,8 +36,15 @@ class EvaSettingsStore @Inject constructor(
             .apply()
     }
 
+    fun saveLightMode(enabled: Boolean) {
+        prefs.edit()
+            .putBoolean(KEY_LIGHT_MODE, enabled)
+            .apply()
+    }
+
     private companion object {
         const val KEY_SELECTED_COMPANION_ID = "selected_companion_id"
         const val KEY_SELECTED_REPLY_STYLE_ID = "selected_reply_style_id"
+        const val KEY_LIGHT_MODE = "light_mode"
     }
 }
