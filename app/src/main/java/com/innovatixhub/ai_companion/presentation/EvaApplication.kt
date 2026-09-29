@@ -18,6 +18,8 @@ import androidx.activity.enableEdgeToEdge
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.animation.*
+import androidx.compose.animation.core.FastOutSlowInEasing
+import androidx.compose.animation.core.tween
 import androidx.compose.foundation.*
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.*
@@ -47,6 +49,7 @@ import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.Dp
+import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.core.content.ContextCompat
@@ -183,9 +186,29 @@ fun EvaShell(
             )
         }
         AnimatedContent(
-            targetState = "${controller.activeTab}-${controller.premiumOpen}-${controller.callOpen}-${controller.lightMode}-${controller.selectedCompanion.id}",
+            targetState = EvaShellState(
+                tab = controller.activeTab,
+                premiumOpen = controller.premiumOpen,
+                callOpen = controller.callOpen,
+                lightMode = controller.lightMode,
+                companionId = controller.selectedCompanion.id
+            ),
+            transitionSpec = {
+                // Direction-aware slide: moving down the tab order slides left,
+                // moving back up slides right, so navigation feels spatial.
+                val forward = targetState.tab.ordinal >= initialState.tab.ordinal
+                val slideSpec = tween<IntOffset>(durationMillis = 300, easing = FastOutSlowInEasing)
+                val fadeSpec = tween<Float>(durationMillis = 220, easing = FastOutSlowInEasing)
+                if (forward) {
+                    (slideInHorizontally(slideSpec) { it / 10 } + fadeIn(fadeSpec)) togetherWith
+                        (slideOutHorizontally(slideSpec) { -it / 10 } + fadeOut(fadeSpec))
+                } else {
+                    (slideInHorizontally(slideSpec) { -it / 10 } + fadeIn(fadeSpec)) togetherWith
+                        (slideOutHorizontally(slideSpec) { it / 10 } + fadeOut(fadeSpec))
+                }
+            },
             label = "eva-shell"
-        ) {
+        ) { _ ->
             when {
                 controller.callOpen -> CallScreen(
                     controller = controller,
@@ -253,6 +276,15 @@ fun EvaShell(
         }
     }
 }
+
+/** Immutable snapshot of everything that can swap the shell screen. */
+private data class EvaShellState(
+    val tab: EvaTab,
+    val premiumOpen: Boolean,
+    val callOpen: Boolean,
+    val lightMode: Boolean,
+    val companionId: String
+)
 
 @Composable
 fun DateOfBirthDialog(

@@ -17,6 +17,10 @@ import androidx.activity.enableEdgeToEdge
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.animation.*
+import androidx.compose.animation.core.Animatable
+import androidx.compose.animation.core.Spring
+import androidx.compose.animation.core.spring
+import androidx.compose.animation.core.tween
 import androidx.compose.foundation.*
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.*
@@ -33,6 +37,7 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.focus.onFocusEvent
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.graphics.toArgb
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.layout.ContentScale
@@ -242,16 +247,7 @@ fun ChatScreen(controller: EvaAppController, scope: CoroutineScope) {
             ) {
                 if (controller.chatsLoading) {
                     item(key = "messages-loading") {
-                        Row(
-                            modifier = Modifier.fillMaxWidth(),
-                            horizontalArrangement = Arrangement.Center
-                        ) {
-                            CircularProgressIndicator(
-                                color = EvaColors.Pink,
-                                modifier = Modifier.size(24.dp),
-                                strokeWidth = 2.dp
-                            )
-                        }
+                        ChatSkeleton()
                     }
                 }
                 var previousDateLabel: String? = null
@@ -265,19 +261,36 @@ fun ChatScreen(controller: EvaAppController, scope: CoroutineScope) {
                     }
                     item(key = message.id) {
                         Box(Modifier.animateItem()) {
-                            MessageBubble(
-                                message = message,
-                                companion = companion,
-                                onPlayAudio = { audioMessage ->
-                                    if (audioMessage.audioBase64.isNotBlank()) {
-                                        playBase64Audio(
-                                            context = context,
-                                            base64Audio = audioMessage.audioBase64,
-                                            mimeType = audioMessage.audioMimeType.ifBlank { "audio/mp4" }
-                                        )
-                                    }
+                            val popScale = remember(message.id) { Animatable(0.94f) }
+                            LaunchedEffect(popScale) {
+                                popScale.animateTo(
+                                    1f,
+                                    spring(
+                                        dampingRatio = Spring.DampingRatioMediumBouncy,
+                                        stiffness = Spring.StiffnessMedium
+                                    )
+                                )
+                            }
+                            Box(
+                                Modifier.graphicsLayer {
+                                    scaleX = popScale.value
+                                    scaleY = popScale.value
                                 }
-                            )
+                            ) {
+                                MessageBubble(
+                                    message = message,
+                                    companion = companion,
+                                    onPlayAudio = { audioMessage ->
+                                        if (audioMessage.audioBase64.isNotBlank()) {
+                                            playBase64Audio(
+                                                context = context,
+                                                base64Audio = audioMessage.audioBase64,
+                                                mimeType = audioMessage.audioMimeType.ifBlank { "audio/mp4" }
+                                            )
+                                        }
+                                    }
+                                )
+                            }
                         }
                     }
                 }
@@ -596,6 +609,7 @@ fun ChatComposer(
     onVoiceSend: () -> Unit
 ) {
     var emojiPickerOpen by remember { mutableStateOf(false) }
+    var inputFocused by remember { mutableStateOf(false) }
     val bringIntoViewRequester = remember { BringIntoViewRequester() }
     val composerScope = rememberCoroutineScope()
     val hapticTick = rememberEvaHaptic()
@@ -625,11 +639,20 @@ fun ChatComposer(
                 }
             )
         }
+        val composerBorder by animateColorAsState(
+            targetValue = when {
+                inputFocused -> EvaColors.Pink.copy(alpha = 0.55f)
+                isEvaLight() -> Color.Black.copy(alpha = 0.08f)
+                else -> Color.White.copy(alpha = 0.09f)
+            },
+            animationSpec = tween(durationMillis = 220),
+            label = "composer-border"
+        )
         GlassCard(
             padding = PaddingValues(start = 6.dp, top = 3.dp, end = 6.dp, bottom = 3.dp),
             radius = 26.dp,
             glassOverride = if (isEvaLight()) Color.White.copy(alpha = 0.86f) else Color(0xFF17141A).copy(alpha = 0.96f),
-            borderOverride = if (isEvaLight()) Color.Black.copy(alpha = 0.08f) else Color.White.copy(alpha = 0.09f)
+            borderOverride = composerBorder
         ) {
             when {
                 voicePreview != null -> VoicePreviewComposer(
@@ -663,6 +686,7 @@ fun ChatComposer(
                             .weight(1f)
                             .bringIntoViewRequester(bringIntoViewRequester)
                             .onFocusEvent { focusState ->
+                                inputFocused = focusState.isFocused
                                 onInputFocusChange(focusState.isFocused)
                                 if (focusState.isFocused) {
                                     composerScope.launch {
@@ -692,12 +716,18 @@ fun ChatComposer(
                             unfocusedIndicatorColor = Color.Transparent
                         )
                     )
+                    val sendInteraction = rememberEvaInteractionSource()
                     Box(
                         modifier = Modifier
                             .size(50.dp)
+                            .pressScale(interactionSource = sendInteraction, pressedScale = 0.88f)
                             .clip(CircleShape)
                             .background(EvaColors.Gradient)
-                            .clickable(enabled = !sending) {
+                            .clickable(
+                                interactionSource = sendInteraction,
+                                indication = null,
+                                enabled = !sending
+                            ) {
                                 if (draft.trim().isNotEmpty()) {
                                     hapticTick()
                                     onSend()
@@ -707,15 +737,26 @@ fun ChatComposer(
                             },
                         contentAlignment = Alignment.Center
                     ) {
-                        Icon(
-                            when {
-                                sending -> Icons.Rounded.Send
-                                draft.trim().isNotEmpty() -> Icons.Rounded.Send
-                                else -> Icons.Rounded.Mic
+                        AnimatedContent(
+                            targetState = sending || draft.trim().isNotEmpty(),
+                            transitionSpec = {
+                                (scaleIn(
+                                    initialScale = 0.6f,
+                                    animationSpec = spring(stiffness = Spring.StiffnessMedium)
+                                ) + fadeIn()) togetherWith
+                                    (scaleOut(
+                                        targetScale = 0.6f,
+                                        animationSpec = spring(stiffness = Spring.StiffnessMedium)
+                                    ) + fadeOut())
                             },
-                            contentDescription = null,
-                            tint = Color.White
-                        )
+                            label = "composer-action"
+                        ) { showSend ->
+                            Icon(
+                                if (showSend) Icons.Rounded.Send else Icons.Rounded.Mic,
+                                contentDescription = null,
+                                tint = Color.White
+                            )
+                        }
                     }
                 }
             }
@@ -851,10 +892,12 @@ fun PickerStrip(items: List<String>, onPick: (String) -> Unit) {
         horizontalArrangement = Arrangement.spacedBy(8.dp)
     ) {
         items.forEach { item ->
+            val interactionSource = rememberEvaInteractionSource()
             GlassCard(
                 modifier = Modifier
                     .size(52.dp)
-                    .clickable { onPick(item) },
+                    .pressScale(interactionSource = interactionSource, pressedScale = 0.88f)
+                    .clickable(interactionSource = interactionSource, indication = null) { onPick(item) },
                 padding = PaddingValues(0.dp),
                 radius = 18.dp
             ) {
@@ -863,6 +906,51 @@ fun PickerStrip(items: List<String>, onPick: (String) -> Unit) {
                 }
             }
         }
+    }
+}
+
+/** Shimmering skeleton shown while history loads, in the shape of real bubbles. */
+@Composable
+fun ChatSkeleton() {
+    Column(
+        modifier = Modifier.fillMaxWidth(),
+        verticalArrangement = Arrangement.spacedBy(14.dp)
+    ) {
+        SkeletonRow(isUser = false, widthFraction = 0.62f)
+        SkeletonRow(isUser = true, widthFraction = 0.46f)
+        SkeletonRow(isUser = false, widthFraction = 0.5f)
+    }
+}
+
+@Composable
+private fun SkeletonRow(isUser: Boolean, widthFraction: Float) {
+    Row(
+        modifier = Modifier.fillMaxWidth(),
+        horizontalArrangement = if (isUser) Arrangement.End else Arrangement.Start,
+        verticalAlignment = Alignment.Bottom
+    ) {
+        if (!isUser) {
+            Box(
+                Modifier
+                    .size(38.dp)
+                    .clip(CircleShape)
+                    .evaShimmer()
+            )
+            Spacer(Modifier.width(8.dp))
+        }
+        Box(
+            Modifier
+                .fillMaxWidth(widthFraction)
+                .height(44.dp)
+                .clip(
+                    if (isUser) {
+                        RoundedCornerShape(topStart = 18.dp, topEnd = 18.dp, bottomStart = 18.dp, bottomEnd = 5.dp)
+                    } else {
+                        RoundedCornerShape(topStart = 18.dp, topEnd = 18.dp, bottomStart = 5.dp, bottomEnd = 18.dp)
+                    }
+                )
+                .evaShimmer()
+        )
     }
 }
 

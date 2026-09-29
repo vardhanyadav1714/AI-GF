@@ -2,6 +2,7 @@ package com.eva.ai.presentation.components
 
 import android.text.format.DateFormat
 import android.view.HapticFeedbackConstants
+import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.animateColorAsState
 import androidx.compose.animation.core.FastOutSlowInEasing
 import androidx.compose.animation.core.LinearEasing
@@ -14,11 +15,20 @@ import androidx.compose.animation.core.infiniteRepeatable
 import androidx.compose.animation.core.rememberInfiniteTransition
 import androidx.compose.animation.core.spring
 import androidx.compose.animation.core.tween
+import androidx.compose.animation.fadeIn
+import androidx.compose.animation.fadeOut
+import androidx.compose.animation.scaleIn
+import androidx.compose.animation.slideInHorizontally
+import androidx.compose.animation.slideInVertically
+import androidx.compose.animation.slideOutHorizontally
+import androidx.compose.animation.togetherWith
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.interaction.MutableInteractionSource
+import androidx.compose.foundation.interaction.collectIsPressedAsState
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -53,14 +63,18 @@ import androidx.compose.material3.Text
 import androidx.compose.material3.TextFieldDefaults
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.CompositionLocalProvider
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.compositionLocalOf
+import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.drawBehind
+import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.draw.scale
 import androidx.compose.ui.focus.onFocusEvent
 import androidx.compose.ui.geometry.Offset
@@ -195,10 +209,12 @@ fun IconGlassButton(
     color: Color = evaText(),
     size: Dp = 48.dp
 ) {
+    val interactionSource = rememberEvaInteractionSource()
     GlassCard(
         modifier = modifier
             .size(size)
-            .clickable(onClick = onClick),
+            .pressScale(interactionSource = interactionSource, pressedScale = 0.92f)
+            .clickable(interactionSource = interactionSource, indication = null, onClick = onClick),
         padding = PaddingValues(0.dp),
         radius = size / 2
     ) {
@@ -215,6 +231,8 @@ fun GradientButton(
     enabled: Boolean = true,
     onClick: () -> Unit
 ) {
+    val interactionSource = rememberEvaInteractionSource()
+    val hapticTick = rememberEvaHaptic()
     val disabledFill = if (isEvaLight()) {
         Color.Black.copy(alpha = 0.06f)
     } else {
@@ -224,8 +242,12 @@ fun GradientButton(
         modifier = Modifier
             .fillMaxWidth()
             .height(58.dp)
+            .pressScale(interactionSource = interactionSource, pressedScale = 0.98f)
             .clip(RoundedCornerShape(30.dp))
-            .clickable(enabled = enabled, onClick = onClick),
+            .clickable(interactionSource = interactionSource, indication = null, enabled = enabled) {
+                hapticTick()
+                onClick()
+            },
         color = Color.Transparent,
         shape = RoundedCornerShape(30.dp),
         shadowElevation = if (enabled) 6.dp else 0.dp
@@ -233,7 +255,13 @@ fun GradientButton(
         Row(
             modifier = Modifier
                 .fillMaxSize()
-                .background(if (enabled) EvaColors.Gradient else Brush.linearGradient(listOf(disabledFill, disabledFill))),
+                .background(
+                    if (enabled) {
+                        evaAnimatedGradient()
+                    } else {
+                        Brush.linearGradient(listOf(disabledFill, disabledFill))
+                    }
+                ),
             horizontalArrangement = Arrangement.Center,
             verticalAlignment = Alignment.CenterVertically
         ) {
@@ -276,6 +304,7 @@ fun EvaBottomNav(active: EvaTab, onSelect: (EvaTab) -> Unit) {
         Row {
             items.forEach { item ->
                 val selected = active == item.first
+                val interactionSource = rememberEvaInteractionSource()
                 val pillColor by animateColorAsState(
                     targetValue = if (selected) EvaColors.Pink.copy(alpha = 0.16f) else Color.Transparent,
                     animationSpec = tween(durationMillis = 220, easing = FastOutSlowInEasing),
@@ -293,9 +322,10 @@ fun EvaBottomNav(active: EvaTab, onSelect: (EvaTab) -> Unit) {
                     modifier = Modifier
                         .weight(1f)
                         .height(48.dp)
+                        .pressScale(interactionSource = interactionSource, pressedScale = 0.94f)
                         .clip(RoundedCornerShape(18.dp))
                         .background(pillColor)
-                        .clickable {
+                        .clickable(interactionSource = interactionSource, indication = null) {
                             hapticTick()
                             onSelect(item.first)
                         },
@@ -454,6 +484,104 @@ fun AnimatedWaveform(
     }
 }
 
+// ── Touch feel ───────────────────────────────────────────────────────────────
+
+/** Springy press-down scale. Pair with clickable(interactionSource, indication = null). */
+@Composable
+fun Modifier.pressScale(
+    interactionSource: MutableInteractionSource,
+    pressedScale: Float = 0.95f
+): Modifier {
+    val pressed by interactionSource.collectIsPressedAsState()
+    val scale by animateFloatAsState(
+        targetValue = if (pressed) pressedScale else 1f,
+        animationSpec = spring(
+            dampingRatio = Spring.DampingRatioMediumBouncy,
+            stiffness = Spring.StiffnessMediumLow
+        ),
+        label = "eva-press-scale"
+    )
+    return this.graphicsLayer {
+        scaleX = scale
+        scaleY = scale
+    }
+}
+
+/** A fresh InteractionSource per component; standard companion to pressScale. */
+@Composable
+fun rememberEvaInteractionSource(): MutableInteractionSource = remember { MutableInteractionSource() }
+
+/** Slowly drifting brand gradient: the "liquid" accent for primary CTAs. */
+@Composable
+fun evaAnimatedGradient(): Brush {
+    val transition = rememberInfiniteTransition(label = "eva-brand-gradient")
+    val shift by transition.animateFloat(
+        initialValue = 0f,
+        targetValue = 1f,
+        animationSpec = infiniteRepeatable(
+            animation = tween(durationMillis = 2800, easing = LinearEasing),
+            repeatMode = RepeatMode.Restart
+        ),
+        label = "eva-brand-shift"
+    )
+    val span = 520f
+    return Brush.linearGradient(
+        colors = listOf(EvaColors.Purple, EvaColors.Pink, EvaColors.Coral, EvaColors.Purple),
+        start = Offset(-span + (span * 2f) * shift, 40f),
+        end = Offset(span * shift, 620f)
+    )
+}
+
+/** Moving sheen for skeleton loaders. Draw a base fill first, then the sheen. */
+@Composable
+fun Modifier.evaShimmer(): Modifier {
+    val transition = rememberInfiniteTransition(label = "eva-shimmer")
+    val progress by transition.animateFloat(
+        initialValue = -1f,
+        targetValue = 2f,
+        animationSpec = infiniteRepeatable(
+            animation = tween(durationMillis = 1150, easing = LinearEasing),
+            repeatMode = RepeatMode.Restart
+        ),
+        label = "eva-shimmer-progress"
+    )
+    val base = if (isEvaLight()) Color.Black.copy(alpha = 0.06f) else Color.White.copy(alpha = 0.06f)
+    val sheen = if (isEvaLight()) Color.Black.copy(alpha = 0.11f) else Color.White.copy(alpha = 0.13f)
+    return this.drawBehind {
+        drawRect(base)
+        val start = size.width * progress
+        drawRect(
+            Brush.linearGradient(
+                colors = listOf(Color.Transparent, sheen, Color.Transparent),
+                start = Offset(start, 0f),
+                end = Offset(start + size.width * 0.7f, size.height)
+            )
+        )
+    }
+}
+
+/** Staggered slide-up + fade entrance for hero and greeting text groups. */
+@Composable
+fun StaggeredAppear(
+    delayMillis: Int = 0,
+    content: @Composable () -> Unit
+) {
+    var visible by remember { mutableStateOf(false) }
+    LaunchedEffect(Unit) {
+        delay(delayMillis.toLong())
+        visible = true
+    }
+    AnimatedVisibility(
+        visible = visible,
+        enter = fadeIn(tween(durationMillis = 360, easing = FastOutSlowInEasing)) +
+            slideInVertically(
+                animationSpec = tween(durationMillis = 360, easing = FastOutSlowInEasing)
+            ) { it / 4 }
+    ) {
+        content()
+    }
+}
+
 // ── Haptics ──────────────────────────────────────────────────────────────────
 
 /** Light, consistent tick used for sends, selections and record start/stop. */
@@ -513,9 +641,11 @@ fun PriceCard(
     onClick: () -> Unit,
     modifier: Modifier = Modifier
 ) {
+    val interactionSource = rememberEvaInteractionSource()
     Column(
         modifier = modifier
             .height(130.dp)
+            .pressScale(interactionSource = interactionSource, pressedScale = 0.97f)
             .clip(RoundedCornerShape(18.dp))
             .background(evaGlass())
             .border(
@@ -523,7 +653,7 @@ fun PriceCard(
                 color = if (selected) EvaColors.Pink else evaBorder(),
                 shape = RoundedCornerShape(18.dp)
             )
-            .clickable(onClick = onClick)
+            .clickable(interactionSource = interactionSource, indication = null, onClick = onClick)
             .padding(12.dp),
         verticalArrangement = Arrangement.Center,
         horizontalAlignment = Alignment.CenterHorizontally

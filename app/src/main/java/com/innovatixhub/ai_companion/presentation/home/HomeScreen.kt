@@ -121,26 +121,32 @@ fun HomeScreen(
             }
             item {
                 Column {
-                    Text(
-                        "Hi ${user.name.ifBlank { "there" }}",
-                        color = evaMuted(),
-                        fontSize = 17.sp,
-                        fontWeight = FontWeight.ExtraBold
-                    )
+                    StaggeredAppear {
+                        Text(
+                            "Hi ${user.name.ifBlank { "there" }}",
+                            color = evaMuted(),
+                            fontSize = 17.sp,
+                            fontWeight = FontWeight.ExtraBold
+                        )
+                    }
                     Spacer(Modifier.height(4.dp))
-                    Text(
-                        "I am ${companion.name}",
-                        color = evaText(),
-                        fontSize = 36.sp,
-                        lineHeight = 38.sp,
-                        fontWeight = FontWeight.ExtraBold
-                    )
-                    Text(
-                        companion.subtitle,
-                        color = evaMuted(),
-                        fontSize = 16.sp,
-                        fontWeight = FontWeight.Medium
-                    )
+                    StaggeredAppear(delayMillis = 90) {
+                        Text(
+                            "I am ${companion.name}",
+                            color = evaText(),
+                            fontSize = 36.sp,
+                            lineHeight = 38.sp,
+                            fontWeight = FontWeight.ExtraBold
+                        )
+                    }
+                    StaggeredAppear(delayMillis = 180) {
+                        Text(
+                            companion.subtitle,
+                            color = evaMuted(),
+                            fontSize = 16.sp,
+                            fontWeight = FontWeight.Medium
+                        )
+                    }
                 }
             }
             item {
@@ -233,17 +239,19 @@ fun HomeCompanionCard(
     onClick: () -> Unit
 ) {
     val borderColor = if (selected) EvaColors.Pink.copy(alpha = 0.86f) else evaBorder()
+    val interactionSource = rememberEvaInteractionSource()
     Row(
         modifier = Modifier
             .width(158.dp)
             .height(78.dp)
+            .pressScale(interactionSource = interactionSource, pressedScale = 0.95f)
             .clip(RoundedCornerShape(22.dp))
             .background(
                 if (selected) EvaColors.Pink.copy(alpha = 0.16f)
                 else evaGlass()
             )
             .border(BorderStroke(1.dp, borderColor), RoundedCornerShape(22.dp))
-            .clickable(onClick = onClick)
+            .clickable(interactionSource = interactionSource, indication = null, onClick = onClick)
             .padding(9.dp),
         verticalAlignment = Alignment.CenterVertically
     ) {
@@ -353,10 +361,12 @@ fun HomeAction(
     onClick: () -> Unit,
     modifier: Modifier = Modifier
 ) {
+    val interactionSource = rememberEvaInteractionSource()
     GlassCard(
         modifier = modifier
             .height(72.dp)
-            .clickable(onClick = onClick),
+            .pressScale(interactionSource = interactionSource, pressedScale = 0.95f)
+            .clickable(interactionSource = interactionSource, indication = null, onClick = onClick),
         padding = PaddingValues(horizontal = 8.dp, vertical = 8.dp),
         radius = 18.dp
     ) {
@@ -400,10 +410,15 @@ fun MoodPanel(onQuickMessage: (String) -> Unit) {
             Spacer(Modifier.height(13.dp))
             Row {
                 moods.forEachIndexed { index, mood ->
+                    val moodInteraction = rememberEvaInteractionSource()
                     Column(
                         modifier = Modifier
                             .weight(1f)
-                            .clickable { onQuickMessage(mood.third) },
+                            .pressScale(interactionSource = moodInteraction, pressedScale = 0.88f)
+                            .clickable(
+                                interactionSource = moodInteraction,
+                                indication = null
+                            ) { onQuickMessage(mood.third) },
                         horizontalAlignment = Alignment.CenterHorizontally
                     ) {
                         Icon(
