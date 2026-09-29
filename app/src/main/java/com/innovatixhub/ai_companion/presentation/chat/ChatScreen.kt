@@ -343,7 +343,7 @@ fun ChatHeader(
             Text(companion.name, fontSize = 21.sp, fontWeight = FontWeight.Black)
             Row(verticalAlignment = Alignment.CenterVertically) {
                 Text(
-                    if (live) "Live" else "Connecting",
+                    if (live) "Live" else "Disconnected",
                     color = evaMuted(),
                     fontSize = 12.sp,
                     fontWeight = FontWeight.Bold
@@ -353,7 +353,7 @@ fun ChatHeader(
                     Modifier
                         .size(8.dp)
                         .clip(CircleShape)
-                        .background(EvaColors.Green)
+                        .background(if (live) EvaColors.Green else evaMuted())
                 )
             }
         }
@@ -862,4 +862,3 @@ private fun List<ChatMessage>.dateGroupCount(): Int {
     }
     return count
 }
-

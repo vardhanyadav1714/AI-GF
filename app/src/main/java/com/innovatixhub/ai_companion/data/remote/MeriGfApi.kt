@@ -3,6 +3,8 @@ package com.eva.ai.data.remote
 import android.content.Context
 import android.net.Uri
 import android.util.Base64
+import android.util.Log
+import com.eva.ai.BuildConfig
 import com.eva.ai.EvaNotificationCenter
 import com.eva.ai.R
 import com.eva.ai.domain.model.AuthSession
@@ -259,6 +261,7 @@ class MeriGfApi @Inject constructor(
                     ?: data.optJSONArray("messages")?.lastObjectWithRole("assistant")
                 messageObject?.bestString("content", "text", default = "").orEmpty()
             }
+        if (reply.isBlank()) throw ApiException("No AI reply was returned. Please try again.", 502)
         val usage = usageFrom(data)
         return SendMessageResult(
             conversationId = data.optString("conversationId", id),
@@ -297,6 +300,7 @@ class MeriGfApi @Inject constructor(
                     ?: data.optJSONArray("messages")?.lastObjectWithRole("assistant")
                 messageObject?.bestString("content", "text", default = "").orEmpty()
             }
+        if (reply.isBlank()) throw ApiException("No AI reply was returned. Please try again.", 502)
         val usage = usageFrom(data)
         return VoiceSendResult(
             conversationId = data.bestString("conversationId", default = conversationId.orEmpty()),
@@ -482,6 +486,8 @@ class MeriGfApi @Inject constructor(
         authorized: Boolean = true,
         allowRefresh: Boolean = true
     ): Any = withContext(Dispatchers.IO) {
+        val startedAt = System.nanoTime()
+        val route = path.replace(Regex("[a-fA-F0-9]{24}"), ":id").substringBefore('?')
         val url = URI("$baseUrl$path").toURL()
         val connection = (url.openConnection() as HttpURLConnection).apply {
             requestMethod = method
@@ -506,6 +512,7 @@ class MeriGfApi @Inject constructor(
             }
 
             val code = connection.responseCode
+            if (BuildConfig.DEBUG) Log.d("EvaApi", "$method $route status=$code elapsedMs=${(System.nanoTime() - startedAt) / 1_000_000}")
             val responseStream = if (code in 200..299) {
                 connection.inputStream
             } else {
@@ -535,12 +542,20 @@ class MeriGfApi @Inject constructor(
 
             val root = JSONObject(responseText)
             if (code !in 200..299 || root.optBoolean("success", true) == false) {
+                if (BuildConfig.DEBUG) {
+                    val error = root.optJSONObject("error")
+                    val safeCode = error?.optString("code").orEmpty().take(64).replace(Regex("[^A-Z0-9_]"), "")
+                    Log.w("EvaApi", "$method $route errorCode=$safeCode status=$code")
+                }
                 val message = root.optJSONObject("error")?.optString("message")
                     ?: root.optString("message", "Backend returned $code.")
                 throw ApiException(message, code)
             }
             val data = root.opt("data")
             if (data == null || data == JSONObject.NULL) root else data
+        } catch (error: Exception) {
+            if (BuildConfig.DEBUG) Log.w("EvaApi", "$method $route failed=${error.javaClass.simpleName} elapsedMs=${(System.nanoTime() - startedAt) / 1_000_000}")
+            throw error
         } finally {
             connection.disconnect()
         }

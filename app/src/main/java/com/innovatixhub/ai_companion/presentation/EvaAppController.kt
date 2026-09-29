@@ -11,7 +11,6 @@ import com.eva.ai.data.remote.MeriGfApi
 import com.eva.ai.data.settings.EvaSettingsStore
 import com.eva.ai.domain.logic.cleanMessage
 import com.eva.ai.domain.logic.estimateSpeechSeconds
-import com.eva.ai.domain.logic.localEvaReply
 import com.eva.ai.domain.model.AuthSession
 import com.eva.ai.domain.model.AuthState
 import com.eva.ai.domain.model.ChatMessage
@@ -23,7 +22,6 @@ import com.eva.ai.domain.model.ReplyStyle
 import com.eva.ai.domain.model.SubscriptionState
 import com.eva.ai.domain.model.VoiceSendResult
 import com.eva.ai.domain.model.companionById
-import kotlinx.coroutines.delay
 import java.net.HttpURLConnection
 import java.util.Locale
 import kotlin.math.max
@@ -457,9 +455,7 @@ class EvaAppController @Inject constructor(
             selectedConversationId = result.conversationId
             applyUsage(result.freeRemaining)
             messages[placeholderIndex] = messages[placeholderIndex].copy(
-                text = result.assistantText.ifBlank {
-                    "I am here with you. Tell me a little more?"
-                },
+                text = result.assistantText,
                 streaming = false
             )
         }.onFailure { error ->
@@ -467,7 +463,10 @@ class EvaAppController @Inject constructor(
                 handleMessageLimitReached(placeholderIndex - 1, placeholderIndex)
             } else {
                 backendLive = false
-                streamLocalReply(cleanText, placeholderIndex)
+                if (placeholderIndex in messages.indices) messages.removeAt(placeholderIndex)
+                if (placeholderIndex - 1 in messages.indices) messages.removeAt(placeholderIndex - 1)
+                if (draft.isBlank()) draft = cleanText
+                notice = error.cleanMessage("Could not get a reply. Please try again.")
             }
         }
         sending = false
@@ -567,9 +566,7 @@ class EvaAppController @Inject constructor(
                 )
             }
             if (placeholderIndex in messages.indices) {
-                val assistantText = result.assistantText.ifBlank {
-                    "I heard you. Tell me a little more?"
-                }
+                val assistantText = result.assistantText
                 messages[placeholderIndex] = if (result.audioBase64.isNotBlank()) {
                     messages[placeholderIndex].copy(
                         text = assistantText,
@@ -593,7 +590,7 @@ class EvaAppController @Inject constructor(
             } else {
                 backendLive = false
                 notice = error.cleanMessage("Voice message could not be sent.")
-                streamLocalReply("voice", placeholderIndex)
+                if (placeholderIndex in messages.indices) messages.removeAt(placeholderIndex)
             }
         }
         sending = false
@@ -624,23 +621,6 @@ class EvaAppController @Inject constructor(
         )
     }
 
-    private suspend fun streamLocalReply(message: String, index: Int) {
-        val reply = localEvaReply(message, selectedCompanion, selectedReplyStyle)
-        val buffer = StringBuilder()
-        reply.split(" ").forEach { word ->
-            delay(36)
-            buffer.append(word).append(" ")
-            if (index in messages.indices) {
-                messages[index] = messages[index].copy(text = buffer.toString())
-            }
-        }
-        if (index in messages.indices) {
-            messages[index] = messages[index].copy(
-                text = buffer.toString().trim(),
-                streaming = false
-            )
-        }
-    }
 
     private fun persistSelectedCompanion() {
         settingsStore.saveSelectedCompanion(selectedCompanion)
