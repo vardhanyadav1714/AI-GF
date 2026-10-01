@@ -136,46 +136,64 @@ fun EvaPage(
                     modifier = Modifier.fillMaxSize()
                 )
             }
-            Box(
-                modifier = Modifier
-                    .fillMaxSize()
-                    .background(
-                        Brush.verticalGradient(
-                            listOf(
-                                evaPageTop().copy(alpha = if (isEvaLight()) 0.90f else 0.94f),
-                                evaPageMid().copy(alpha = if (isEvaLight()) 0.92f else 0.96f),
-                                evaPageBottom().copy(alpha = if (isEvaLight()) 0.96f else 0.98f)
-                            )
-                        )
-                    )
-            )
-            // Ambient brand glow: a soft radial wash that slowly breathes behind
-            // the content. The calm "AI presence" cue, kept subtle for contrast.
-            val glowTransition = rememberInfiniteTransition(label = "eva-ambient")
-            val glowCycle by glowTransition.animateFloat(
+            // Aurora field: three slow-drifting brand-colored blobs over a deep
+            // base gradient. The ambient "alive" backdrop of the whole app.
+            val aurora = rememberInfiniteTransition(label = "eva-aurora")
+            val drift1 by aurora.animateFloat(
                 initialValue = 0f,
                 targetValue = 1f,
                 animationSpec = infiniteRepeatable(
-                    animation = tween(durationMillis = 5200, easing = FastOutSlowInEasing),
+                    animation = tween(durationMillis = 11000, easing = LinearEasing),
                     repeatMode = RepeatMode.Reverse
                 ),
-                label = "eva-ambient-cycle"
+                label = "aurora-a"
             )
-            val ambientGlowAlpha = (if (isEvaLight()) 0.05f else 0.11f) +
-                glowCycle * (if (isEvaLight()) 0.04f else 0.07f)
+            val drift2 by aurora.animateFloat(
+                initialValue = 0f,
+                targetValue = 1f,
+                animationSpec = infiniteRepeatable(
+                    animation = tween(durationMillis = 15000, easing = LinearEasing),
+                    repeatMode = RepeatMode.Reverse
+                ),
+                label = "aurora-b"
+            )
+            val drift3 by aurora.animateFloat(
+                initialValue = 0f,
+                targetValue = 1f,
+                animationSpec = infiniteRepeatable(
+                    animation = tween(durationMillis = 8500, easing = LinearEasing),
+                    repeatMode = RepeatMode.Reverse
+                ),
+                label = "aurora-c"
+            )
+            val light = isEvaLight()
+            val baseTop = evaPageTop()
+            val baseMid = evaPageMid()
+            val baseBottom = evaPageBottom()
+            val blob1 = EvaColors.Purple.copy(alpha = if (light) 0.10f else 0.20f)
+            val blob2 = EvaColors.Pink.copy(alpha = if (light) 0.08f else 0.14f)
+            val blob3 = EvaColors.Coral.copy(alpha = if (light) 0.05f else 0.09f)
             Box(
                 modifier = Modifier
                     .fillMaxSize()
                     .drawBehind {
-                        drawRect(
-                            Brush.radialGradient(
-                                colors = listOf(
-                                    EvaColors.Purple.copy(alpha = ambientGlowAlpha),
-                                    Color.Transparent
-                                ),
-                                center = Offset(size.width / 2f, 0f),
-                                radius = size.width * 1.05f
-                            )
+                        drawRect(Brush.verticalGradient(listOf(baseTop, baseMid, baseBottom)))
+                        val w = size.width
+                        val h = size.height
+                        drawCircle(
+                            brush = Brush.radialGradient(listOf(blob1, Color.Transparent)),
+                            radius = w * (0.85f + 0.10f * drift1),
+                            center = Offset(w * (0.22f + 0.16f * drift1), h * (0.06f + 0.04f * drift2))
+                        )
+                        drawCircle(
+                            brush = Brush.radialGradient(listOf(blob2, Color.Transparent)),
+                            radius = w * (0.75f + 0.12f * drift2),
+                            center = Offset(w * (0.85f - 0.18f * drift2), h * (0.30f + 0.06f * drift1))
+                        )
+                        drawCircle(
+                            brush = Brush.radialGradient(listOf(blob3, Color.Transparent)),
+                            radius = w * (0.70f + 0.10f * drift3),
+                            center = Offset(w * (0.15f + 0.20f * drift3), h * (0.62f - 0.08f * drift3))
                         )
                     }
             )
@@ -628,6 +646,27 @@ fun rememberEvaHaptic(): () -> Unit {
 }
 
 // ── Small shared pieces ──────────────────────────────────────────────────────
+
+/** Avatar wrapped in the brand gradient ring — the app's presence marker. */
+@Composable
+fun GradientAvatar(imageRes: Int, size: Dp, modifier: Modifier = Modifier) {
+    Box(
+        modifier = modifier
+            .size(size)
+            .clip(CircleShape)
+            .background(EvaColors.Gradient)
+            .padding(2.dp)
+    ) {
+        Image(
+            painter = painterResource(imageRes),
+            contentDescription = null,
+            contentScale = ContentScale.Crop,
+            modifier = Modifier
+                .fillMaxSize()
+                .clip(CircleShape)
+        )
+    }
+}
 
 @Composable
 fun DateChip(label: String) {

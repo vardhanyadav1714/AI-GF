@@ -358,14 +358,7 @@ fun ChatHeader(
             size = 42.dp
         )
         Spacer(Modifier.width(8.dp))
-        Image(
-            painter = painterResource(companion.imageRes),
-            contentDescription = null,
-            contentScale = ContentScale.Crop,
-            modifier = Modifier
-                .size(42.dp)
-                .clip(CircleShape)
-        )
+        GradientAvatar(imageRes = companion.imageRes, size = 44.dp)
         Spacer(Modifier.width(9.dp))
         Column(Modifier.weight(1f)) {
             Text(companion.name, fontSize = 21.sp, fontWeight = FontWeight.ExtraBold)
@@ -471,7 +464,20 @@ fun MessageBubble(
                         Modifier.background(EvaColors.Gradient)
                     } else {
                         Modifier
-                            .background(quietBubbleColor)
+                            .background(
+                                if (isEvaLight()) {
+                                    Brush.verticalGradient(listOf(quietBubbleColor, quietBubbleColor))
+                                } else {
+                                    // Faint vertical sheen gives the assistant
+                                    // bubble dimension against the aurora.
+                                    Brush.verticalGradient(
+                                        listOf(
+                                            EvaColors.InkHigh.copy(alpha = 0.94f),
+                                            Color(0xFF2A2138).copy(alpha = 0.94f)
+                                        )
+                                    )
+                                }
+                            )
                             .border(BorderStroke(1.dp, evaBorder()), assistantShape)
                     }
                 )

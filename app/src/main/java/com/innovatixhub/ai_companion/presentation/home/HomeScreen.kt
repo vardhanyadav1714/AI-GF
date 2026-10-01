@@ -41,6 +41,7 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalFocusManager
 import androidx.compose.ui.platform.LocalView
 import androidx.compose.ui.res.painterResource
+import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.text.input.KeyboardType
@@ -133,10 +134,14 @@ fun HomeScreen(
                     StaggeredAppear(delayMillis = 90) {
                         Text(
                             "I am ${companion.name}",
-                            color = evaText(),
-                            fontSize = 36.sp,
-                            lineHeight = 38.sp,
-                            fontWeight = FontWeight.ExtraBold
+                            fontSize = 40.sp,
+                            lineHeight = 44.sp,
+                            fontWeight = FontWeight.ExtraBold,
+                            style = TextStyle(
+                                brush = Brush.linearGradient(
+                                    listOf(EvaColors.Purple, EvaColors.Pink, EvaColors.Coral)
+                                )
+                            )
                         )
                     }
                     StaggeredAppear(delayMillis = 180) {
@@ -167,13 +172,15 @@ fun HomeScreen(
                         icon = Icons.Rounded.GraphicEq,
                         label = "Voice call",
                         onClick = onVoiceNotes,
-                        modifier = Modifier.weight(1f)
+                        modifier = Modifier.weight(1f),
+                        tintBackground = EvaColors.Purple.copy(alpha = 0.10f)
                     )
                     HomeAction(
                         icon = Icons.Rounded.CardGiftcard,
                         label = "Premium",
                         onClick = onPremium,
-                        modifier = Modifier.weight(1f)
+                        modifier = Modifier.weight(1f),
+                        tintBackground = EvaColors.Gold.copy(alpha = 0.10f)
                     )
                 }
             }
@@ -359,7 +366,8 @@ fun HomeAction(
     icon: ImageVector,
     label: String,
     onClick: () -> Unit,
-    modifier: Modifier = Modifier
+    modifier: Modifier = Modifier,
+    tintBackground: Color? = null
 ) {
     val interactionSource = rememberEvaInteractionSource()
     GlassCard(
@@ -368,7 +376,8 @@ fun HomeAction(
             .pressScale(interactionSource = interactionSource, pressedScale = 0.95f)
             .clickable(interactionSource = interactionSource, indication = null, onClick = onClick),
         padding = PaddingValues(horizontal = 8.dp, vertical = 8.dp),
-        radius = 18.dp
+        radius = 18.dp,
+        glassOverride = tintBackground
     ) {
         Column(
             modifier = Modifier.fillMaxSize(),
