@@ -392,28 +392,25 @@ fun ProfileEditor(controller: EvaAppController, user: EvaUser, scope: CoroutineS
                 Text("Edit profile", fontWeight = FontWeight.Bold, fontSize = 15.sp)
             }
             Spacer(Modifier.height(10.dp))
-            OutlinedTextField(
+            EvaTextField(
                 value = editName,
                 onValueChange = { editName = it },
-                label = { Text("Your name") },
-                singleLine = true,
-                modifier = Modifier.fillMaxWidth()
+                label = "Your name",
+                imeAction = ImeAction.Next
             )
             Spacer(Modifier.height(8.dp))
-            OutlinedTextField(
+            EvaTextField(
                 value = editPreferred,
                 onValueChange = { editPreferred = it },
-                label = { Text("What Eva calls you") },
-                singleLine = true,
-                modifier = Modifier.fillMaxWidth()
+                label = "What Eva calls you",
+                imeAction = ImeAction.Next
             )
             Spacer(Modifier.height(8.dp))
-            OutlinedTextField(
+            EvaTextField(
                 value = editOccupation,
                 onValueChange = { editOccupation = it },
-                label = { Text("Occupation") },
-                singleLine = true,
-                modifier = Modifier.fillMaxWidth()
+                label = "Occupation",
+                imeAction = ImeAction.Done
             )
             Spacer(Modifier.height(10.dp))
             Box(

@@ -146,47 +146,46 @@ fun PremiumScreen(
                 }
             }
             item {
-                Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                    PriceCard(
-                        title = "Monthly",
-                        price = plan.formattedAmount,
-                        tag = "MONTHLY PLAN",
-                        selected = true,
-                        onClick = {},
-                        modifier = Modifier.weight(1f)
-                    )
-                    GlassCard(
-                        modifier = Modifier
-                            .weight(1f)
-                            .height(130.dp),
-                        radius = 16.dp
-                    ) {
-                        Column(
-                            modifier = Modifier.fillMaxSize(),
-                            verticalArrangement = Arrangement.Center,
-                            horizontalAlignment = Alignment.CenterHorizontally
-                        ) {
-                            Icon(
-                                if (active) Icons.Rounded.Verified else Icons.Rounded.WorkspacePremium,
-                                contentDescription = null,
-                                tint = if (active) EvaColors.Green else EvaColors.Gold,
-                                modifier = Modifier.size(30.dp)
-                            )
-                            Spacer(Modifier.height(10.dp))
+                // One honest plan summary instead of a single plan pretending
+                // to be a selectable list.
+                GlassCard(padding = PaddingValues(16.dp), radius = 20.dp) {
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        Column(Modifier.weight(1f)) {
                             Text(
-                                if (active) "Active" else "Ready",
+                                plan.name,
+                                color = evaText(),
                                 fontWeight = FontWeight.Bold,
-                                fontSize = 17.sp
+                                maxLines = 1,
+                                overflow = TextOverflow.Ellipsis
                             )
-                            Spacer(Modifier.height(6.dp))
+                            Spacer(Modifier.height(4.dp))
                             Text(
-                                subscription?.status?.replaceFirstChar {
-                                    if (it.isLowerCase()) it.titlecase(Locale.getDefault()) else it.toString()
-                                } ?: "Not subscribed",
+                                "${plan.formattedAmount} / month",
+                                color = evaText(),
+                                fontSize = 20.sp,
+                                fontWeight = FontWeight.ExtraBold
+                            )
+                            Spacer(Modifier.height(3.dp))
+                            Text(
+                                "Billed monthly · cancel anytime",
                                 color = evaMuted(),
-                                fontSize = 12.sp,
-                                fontWeight = FontWeight.Bold,
-                                textAlign = TextAlign.Center
+                                fontSize = 12.sp
+                            )
+                        }
+                        Box(
+                            modifier = Modifier
+                                .clip(RoundedCornerShape(999.dp))
+                                .background(
+                                    if (active) EvaColors.Green.copy(alpha = 0.16f)
+                                    else EvaColors.Gold.copy(alpha = 0.16f)
+                                )
+                                .padding(horizontal = 10.dp, vertical = 6.dp)
+                        ) {
+                            Text(
+                                if (active) "ACTIVE" else "READY",
+                                color = if (active) EvaColors.Green else EvaColors.Gold,
+                                fontSize = 11.sp,
+                                fontWeight = FontWeight.ExtraBold
                             )
                         }
                     }

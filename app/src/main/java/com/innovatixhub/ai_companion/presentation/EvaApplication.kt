@@ -321,14 +321,22 @@ fun DateOfBirthDialog(
 
     AlertDialog(
         onDismissRequest = onSkip,
-        title = { Text("A little about you", fontWeight = FontWeight.Black) },
+        containerColor = if (isEvaLight()) Color.White else EvaColors.InkHigh,
+        shape = RoundedCornerShape(24.dp),
+        title = {
+            Text(
+                "A little about you",
+                color = evaText(),
+                fontWeight = FontWeight.ExtraBold
+            )
+        },
         text = {
             Column {
-                OutlinedTextField(
+                EvaTextField(
                     value = preferredName,
                     onValueChange = { preferredName = it.take(80) },
-                    label = { Text("What should we call you?") },
-                    singleLine = true
+                    label = "What should we call you?",
+                    imeAction = ImeAction.Next
                 )
                 Spacer(Modifier.height(12.dp))
                 Text(
@@ -337,28 +345,28 @@ fun DateOfBirthDialog(
                 )
                 Spacer(Modifier.height(12.dp))
                 Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                    OutlinedTextField(
+                    EvaTextField(
                         value = day,
                         onValueChange = { day = it.filter(Char::isDigit).take(2) },
-                        label = { Text("DD") },
-                        keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
-                        singleLine = true,
+                        label = "DD",
+                        keyboardType = KeyboardType.Number,
+                        imeAction = ImeAction.Next,
                         modifier = Modifier.weight(1f)
                     )
-                    OutlinedTextField(
+                    EvaTextField(
                         value = month,
                         onValueChange = { month = it.filter(Char::isDigit).take(2) },
-                        label = { Text("MM") },
-                        keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
-                        singleLine = true,
+                        label = "MM",
+                        keyboardType = KeyboardType.Number,
+                        imeAction = ImeAction.Next,
                         modifier = Modifier.weight(1f)
                     )
-                    OutlinedTextField(
+                    EvaTextField(
                         value = year,
                         onValueChange = { year = it.filter(Char::isDigit).take(4) },
-                        label = { Text("YYYY") },
-                        keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
-                        singleLine = true,
+                        label = "YYYY",
+                        keyboardType = KeyboardType.Number,
+                        imeAction = ImeAction.Done,
                         modifier = Modifier.weight(1.4f)
                     )
                 }

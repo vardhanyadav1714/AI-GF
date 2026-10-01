@@ -95,7 +95,6 @@ fun CallScreen(
     var recordingSeconds by remember { mutableIntStateOf(0) }
     var recording by remember { mutableStateOf(false) }
     var recordingStartedAt by remember { mutableStateOf(0L) }
-    var speaker by remember { mutableStateOf(true) }
     val hapticTick = rememberEvaHaptic()
     val callStatus = when {
         controller.sending -> "${companion.name} is replying"
@@ -253,7 +252,7 @@ fun CallScreen(
             ) {
                 Row(
                     modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.SpaceBetween,
+                    horizontalArrangement = Arrangement.SpaceEvenly,
                     verticalAlignment = Alignment.CenterVertically
                 ) {
                     CallAction(
@@ -290,12 +289,6 @@ fun CallScreen(
                             modifier = Modifier.size(34.dp)
                         )
                     }
-                    CallAction(
-                        icon = Icons.Rounded.VolumeUp,
-                        label = if (speaker) "Speaker" else "Earpiece",
-                        active = speaker,
-                        onClick = { speaker = !speaker }
-                    )
                 }
             }
         }

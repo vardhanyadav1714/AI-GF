@@ -811,7 +811,8 @@ fun EvaTextField(
     label: String,
     keyboardType: KeyboardType = KeyboardType.Text,
     imeAction: ImeAction,
-    onSend: (() -> Unit)? = null
+    onSend: (() -> Unit)? = null,
+    modifier: Modifier = Modifier
 ) {
     val bringIntoViewRequester = remember { BringIntoViewRequester() }
     val scope = rememberCoroutineScope()
@@ -822,6 +823,7 @@ fun EvaTextField(
         label = { Text(label) },
         singleLine = true,
         modifier = Modifier
+            .then(modifier)
             .fillMaxWidth()
             .bringIntoViewRequester(bringIntoViewRequester)
             .onFocusEvent { focusState ->
