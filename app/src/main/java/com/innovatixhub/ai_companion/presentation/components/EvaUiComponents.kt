@@ -149,9 +149,20 @@ fun EvaPage(
                         )
                     )
             )
-            // Ambient brand glow: a single soft radial wash behind the content,
-            // the calm "AI presence" cue. Kept subtle so text contrast holds.
-            val ambientGlowAlpha = if (isEvaLight()) 0.07f else 0.16f
+            // Ambient brand glow: a soft radial wash that slowly breathes behind
+            // the content. The calm "AI presence" cue, kept subtle for contrast.
+            val glowTransition = rememberInfiniteTransition(label = "eva-ambient")
+            val glowCycle by glowTransition.animateFloat(
+                initialValue = 0f,
+                targetValue = 1f,
+                animationSpec = infiniteRepeatable(
+                    animation = tween(durationMillis = 5200, easing = FastOutSlowInEasing),
+                    repeatMode = RepeatMode.Reverse
+                ),
+                label = "eva-ambient-cycle"
+            )
+            val ambientGlowAlpha = (if (isEvaLight()) 0.05f else 0.11f) +
+                glowCycle * (if (isEvaLight()) 0.04f else 0.07f)
             Box(
                 modifier = Modifier
                     .fillMaxSize()
@@ -186,6 +197,8 @@ fun GlassCard(
     borderOverride: Color? = null,
     content: @Composable () -> Unit
 ) {
+    // A faint top-edge highlight gives glass cards depth without drop shadows.
+    val topHighlight = if (isEvaLight()) Color.Black.copy(alpha = 0.04f) else Color.White.copy(alpha = 0.07f)
     Surface(
         modifier = modifier,
         shape = RoundedCornerShape(radius),
@@ -195,7 +208,18 @@ fun GlassCard(
         tonalElevation = 0.dp,
         shadowElevation = 0.dp
     ) {
-        Box(modifier = Modifier.padding(padding)) {
+        Box(
+            modifier = Modifier
+                .padding(padding)
+                .drawBehind {
+                    drawRect(
+                        Brush.verticalGradient(
+                            0f to topHighlight,
+                            0.4f to Color.Transparent
+                        )
+                    )
+                }
+        ) {
             content()
         }
     }

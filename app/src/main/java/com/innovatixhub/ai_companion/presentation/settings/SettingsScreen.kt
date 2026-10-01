@@ -208,8 +208,8 @@ fun ProfileScreen(controller: EvaAppController, user: EvaUser, scope: CoroutineS
                     )
                     Spacer(Modifier.weight(1f))
                     IconGlassButton(
-                        icon = if (controller.lightMode) Icons.Rounded.LightMode else Icons.Rounded.DarkMode,
-                        onClick = { controller.applyLightMode(!controller.lightMode) }
+                        icon = if (controller.lightMode == true) Icons.Rounded.LightMode else Icons.Rounded.DarkMode,
+                        onClick = { controller.applyLightMode(!(controller.lightMode == true)) }
                     )
                 }
             }
@@ -345,14 +345,14 @@ fun ProfileScreen(controller: EvaAppController, user: EvaUser, scope: CoroutineS
                             verticalAlignment = Alignment.CenterVertically
                         ) {
                             Icon(
-                                if (controller.lightMode) Icons.Rounded.LightMode else Icons.Rounded.DarkMode,
+                                if (controller.lightMode == true) Icons.Rounded.LightMode else Icons.Rounded.DarkMode,
                                 contentDescription = null,
                                 tint = EvaColors.Pink
                             )
                             Spacer(Modifier.width(14.dp))
                             Text("Light mode", fontWeight = FontWeight.SemiBold, modifier = Modifier.weight(1f))
                             Switch(
-                                checked = controller.lightMode,
+                                checked = controller.lightMode == true,
                                 onCheckedChange = { controller.applyLightMode(it) },
                                 colors = SwitchDefaults.colors(
                                     checkedThumbColor = Color.White,

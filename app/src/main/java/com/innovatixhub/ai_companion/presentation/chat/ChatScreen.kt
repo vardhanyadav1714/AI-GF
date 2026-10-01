@@ -635,7 +635,6 @@ fun ChatComposer(
                 ),
                 onPick = { emoji ->
                     onDraftChange(draft + emoji)
-                    emojiPickerOpen = false
                 }
             )
         }

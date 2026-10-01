@@ -22,7 +22,9 @@ class EvaSettingsStore @Inject constructor(
     fun selectedReplyStyle(): ReplyStyle =
         replyStyleById(prefs.getString(KEY_SELECTED_REPLY_STYLE_ID, "natural"))
 
-    fun lightMode(): Boolean = prefs.getBoolean(KEY_LIGHT_MODE, false)
+    /** null = follow the system theme; true/false = explicit user override. */
+    fun lightModePref(): Boolean? =
+        if (prefs.contains(KEY_LIGHT_MODE)) prefs.getBoolean(KEY_LIGHT_MODE, false) else null
 
     fun saveSelectedCompanion(companion: CompanionProfile) {
         prefs.edit()

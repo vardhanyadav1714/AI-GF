@@ -92,9 +92,11 @@ fun EvaApplication(
     onGoogleSignIn: () -> Unit,
     onGooglePlaySubscribe: () -> Unit
 ) {
-    AICompanionTheme(darkTheme = !controller.lightMode, dynamicColor = false) {
-        CompositionLocalProvider(LocalEvaLightMode provides controller.lightMode) {
-            EvaSystemBars(lightMode = controller.lightMode)
+    // No explicit override yet: follow the system theme, including live changes.
+    val effectiveLightMode = controller.lightMode ?: !isSystemInDarkTheme()
+    AICompanionTheme(darkTheme = !effectiveLightMode, dynamicColor = false) {
+        CompositionLocalProvider(LocalEvaLightMode provides effectiveLightMode) {
+            EvaSystemBars(lightMode = effectiveLightMode)
             val snackbarHostState = remember { SnackbarHostState() }
 
             LaunchedEffect(controller.notice) {
@@ -190,7 +192,7 @@ fun EvaShell(
                 tab = controller.activeTab,
                 premiumOpen = controller.premiumOpen,
                 callOpen = controller.callOpen,
-                lightMode = controller.lightMode,
+                lightMode = controller.lightMode ?: !isSystemInDarkTheme(),
                 companionId = controller.selectedCompanion.id
             ),
             transitionSpec = {
