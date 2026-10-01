@@ -48,7 +48,7 @@ private val LightColorScheme = lightColorScheme(
     onBackground = EvaOnDark,
     surface = EvaMistRaised,
     onSurface = EvaOnDark,
-    surfaceVariant = Color(0xFFF3EAF6),
+    surfaceVariant = Color(0xFFF4F4F5),
     onSurfaceVariant = EvaMutedOnDark,
     outline = Color.Black.copy(alpha = 0.12f),
     outlineVariant = Color.Black.copy(alpha = 0.08f),

@@ -136,28 +136,16 @@ fun EvaPage(
                     modifier = Modifier.fillMaxSize()
                 )
             }
-            // Calm backdrop: deep base gradient with a single, static brand
-            // wash at the top. Quiet by design — no ambient animation.
+            // Calm backdrop: a clean neutral gradient. All brand color lives
+            // in the accents — never in the canvas.
             val baseTop = evaPageTop()
             val baseMid = evaPageMid()
             val baseBottom = evaPageBottom()
-            val wash = EvaColors.Purple.copy(alpha = if (isEvaLight()) 0.035f else 0.10f)
             Box(
                 modifier = Modifier
                     .fillMaxSize()
                     .drawBehind {
                         drawRect(Brush.verticalGradient(listOf(baseTop, baseMid, baseBottom)))
-                        // Intermediate stops keep the wash from showing a hard
-                        // circular edge against light backgrounds.
-                        drawCircle(
-                            brush = Brush.radialGradient(
-                                0f to wash,
-                                0.55f to wash.copy(alpha = wash.alpha * 0.35f),
-                                1f to Color.Transparent
-                            ),
-                            radius = size.width * 1.35f,
-                            center = Offset(size.width * 0.5f, -size.height * 0.04f)
-                        )
                     }
             )
             Box(Modifier.fillMaxSize()) {
@@ -868,10 +856,10 @@ fun evaText(): Color = if (isEvaLight()) Color(0xFF17101B) else Color.White
 fun evaMuted(): Color = if (isEvaLight()) Color(0xFF6E6273) else Color.White.copy(alpha = 0.70f)
 
 @Composable
-fun evaPageTop(): Color = if (isEvaLight()) Color(0xFFFFF8FC) else EvaInk
+fun evaPageTop(): Color = if (isEvaLight()) Color(0xFFFAFAFA) else EvaInk
 
 @Composable
-fun evaPageMid(): Color = if (isEvaLight()) Color(0xFFF7EFF8) else Color(0xFF151020)
+fun evaPageMid(): Color = if (isEvaLight()) Color(0xFFF4F4F5) else Color(0xFF121216)
 
 @Composable
 fun evaPageBottom(): Color = if (isEvaLight()) Color.White else EvaInk

@@ -179,15 +179,13 @@ fun HomeScreen(
                         icon = Icons.Rounded.GraphicEq,
                         label = "Voice call",
                         onClick = onVoiceNotes,
-                        modifier = Modifier.weight(1f),
-                        tintBackground = EvaColors.Purple.copy(alpha = 0.10f)
+                        modifier = Modifier.weight(1f)
                     )
                     HomeAction(
                         icon = Icons.Rounded.CardGiftcard,
                         label = "Premium",
                         onClick = onPremium,
-                        modifier = Modifier.weight(1f),
-                        tintBackground = EvaColors.Gold.copy(alpha = 0.10f)
+                        modifier = Modifier.weight(1f)
                     )
                 }
             }
