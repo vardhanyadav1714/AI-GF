@@ -420,96 +420,95 @@ fun MessageBubble(
     onPlayAudio: (ChatMessage) -> Unit = {}
 ) {
     val fromUser = message.fromUser
-    val bubbleTextColor = if (fromUser) Color.White else evaText()
-    val quietBubbleColor = if (isEvaLight()) {
-        Color.White.copy(alpha = 0.78f)
-    } else {
-        EvaColors.InkHigh.copy(alpha = 0.92f)
-    }
-    val assistantShape = RoundedCornerShape(
-        topStart = 18.dp,
-        topEnd = 18.dp,
-        bottomStart = 5.dp,
-        bottomEnd = 18.dp
-    )
-    val userShape = RoundedCornerShape(
-        topStart = 18.dp,
-        topEnd = 18.dp,
-        bottomStart = 18.dp,
-        bottomEnd = 5.dp
-    )
 
-    Row(
-        modifier = Modifier.fillMaxWidth(),
-        horizontalArrangement = if (fromUser) Arrangement.End else Arrangement.Start,
-        verticalAlignment = Alignment.Bottom
-    ) {
-        if (!fromUser) {
-            Image(
-                painter = painterResource(companion.imageRes),
-                contentDescription = null,
-                contentScale = ContentScale.Crop,
-                modifier = Modifier
-                    .size(38.dp)
-                    .clip(CircleShape)
+    if (!fromUser) {
+        // Modern AI-chat layout: assistant replies are plain text sitting
+        // directly on the backdrop — no bubble, no per-message avatar.
+        // Only voice replies keep a small card, because a player needs a
+        // surface to live on.
+        Column(
+            modifier = Modifier.fillMaxWidth(),
+            horizontalAlignment = Alignment.Start
+        ) {
+            when (message.kind) {
+                MessageKind.Voice -> GlassCard(
+                    padding = PaddingValues(horizontal = 12.dp, vertical = 10.dp),
+                    radius = 18.dp
+                ) {
+                    VoiceNoteBubble(
+                        seconds = message.voiceSeconds,
+                        fromUser = false,
+                        companionName = companion.name,
+                        canPlay = message.audioBase64.isNotBlank(),
+                        onPlay = { onPlayAudio(message) }
+                    )
+                }
+
+                MessageKind.Text -> if (message.text.isBlank()) {
+                    TypingIndicator(modifier = Modifier.padding(vertical = 6.dp))
+                } else {
+                    Text(
+                        text = message.text,
+                        color = evaText(),
+                        fontSize = 15.5.sp,
+                        lineHeight = 22.sp,
+                        modifier = Modifier.padding(end = 28.dp)
+                    )
+                }
+            }
+            Spacer(Modifier.height(3.dp))
+            Text(
+                formatTime(message.createdAtMillis),
+                color = evaMuted().copy(alpha = 0.7f),
+                fontSize = 10.5.sp,
+                fontWeight = FontWeight.Medium,
+                modifier = Modifier.padding(start = 2.dp)
             )
-            Spacer(Modifier.width(8.dp))
         }
+        return
+    }
+
+    // User messages keep a compact gradient bubble, aligned right.
+    val userShape = RoundedCornerShape(
+        topStart = 20.dp,
+        topEnd = 20.dp,
+        bottomStart = 20.dp,
+        bottomEnd = 6.dp
+    )
+    Column(
+        modifier = Modifier.fillMaxWidth(),
+        horizontalAlignment = Alignment.End
+    ) {
         Column(
             modifier = Modifier
-                .widthIn(max = if (fromUser) 296.dp else 284.dp)
-                .clip(if (fromUser) userShape else assistantShape)
-                .then(
-                    if (fromUser) {
-                        Modifier.background(EvaColors.Gradient)
-                    } else {
-                        Modifier
-                            .background(
-                                if (isEvaLight()) {
-                                    Brush.verticalGradient(listOf(quietBubbleColor, quietBubbleColor))
-                                } else {
-                                    // Faint vertical sheen gives the assistant
-                                    // bubble dimension against the aurora.
-                                    Brush.verticalGradient(
-                                        listOf(
-                                            EvaColors.InkHigh.copy(alpha = 0.94f),
-                                            Color(0xFF2A2138).copy(alpha = 0.94f)
-                                        )
-                                    )
-                                }
-                            )
-                            .border(BorderStroke(1.dp, evaBorder()), assistantShape)
-                    }
-                )
-                .padding(start = 15.dp, top = 12.dp, end = 15.dp, bottom = 10.dp),
+                .widthIn(max = 300.dp)
+                .clip(userShape)
+                .background(EvaColors.Gradient)
+                .padding(start = 15.dp, top = 11.dp, end = 15.dp, bottom = 9.dp),
             horizontalAlignment = Alignment.End
         ) {
             when (message.kind) {
                 MessageKind.Voice -> VoiceNoteBubble(
                     seconds = message.voiceSeconds,
-                    fromUser = fromUser,
+                    fromUser = true,
                     companionName = companion.name,
                     canPlay = message.audioBase64.isNotBlank(),
                     onPlay = { onPlayAudio(message) }
                 )
 
-                MessageKind.Text -> if (message.text.isBlank()) {
-                    TypingIndicator(modifier = Modifier.padding(vertical = 4.dp))
-                } else {
-                    Text(
-                        text = message.text,
-                        color = bubbleTextColor,
-                        fontSize = 15.sp,
-                        lineHeight = 21.sp,
-                        fontWeight = if (fromUser) FontWeight.SemiBold else FontWeight.Normal
-                    )
-                }
+                MessageKind.Text -> Text(
+                    text = message.text,
+                    color = Color.White,
+                    fontSize = 15.sp,
+                    lineHeight = 21.sp,
+                    fontWeight = FontWeight.Medium
+                )
             }
-            Spacer(Modifier.height(5.dp))
+            Spacer(Modifier.height(4.dp))
             Text(
                 formatTime(message.createdAtMillis),
-                color = if (fromUser) Color.White.copy(alpha = 0.64f) else evaMuted().copy(alpha = 0.76f),
-                fontSize = 11.sp,
+                color = Color.White.copy(alpha = 0.68f),
+                fontSize = 10.5.sp,
                 fontWeight = FontWeight.Medium
             )
         }
@@ -660,11 +659,16 @@ fun ChatComposer(
             animationSpec = tween(durationMillis = 220),
             label = "composer-border"
         )
-        GlassCard(
-            padding = PaddingValues(start = 6.dp, top = 3.dp, end = 6.dp, bottom = 3.dp),
-            radius = 26.dp,
-            glassOverride = if (isEvaLight()) Color.White.copy(alpha = 0.86f) else Color(0xFF17141A).copy(alpha = 0.96f),
-            borderOverride = composerBorder
+        Box(
+            modifier = Modifier
+                .fillMaxWidth()
+                .clip(RoundedCornerShape(28.dp))
+                .background(
+                    if (isEvaLight()) Color.White.copy(alpha = 0.9f)
+                    else Color(0xFF17121F).copy(alpha = 0.94f)
+                )
+                .border(BorderStroke(1.dp, composerBorder), RoundedCornerShape(28.dp))
+                .padding(horizontal = 5.dp, vertical = 4.dp)
         ) {
             when {
                 voicePreview != null -> VoicePreviewComposer(
@@ -1011,33 +1015,46 @@ fun ChatSkeleton() {
 
 @Composable
 private fun SkeletonRow(isUser: Boolean, widthFraction: Float) {
-    Row(
-        modifier = Modifier.fillMaxWidth(),
-        horizontalArrangement = if (isUser) Arrangement.End else Arrangement.Start,
-        verticalAlignment = Alignment.Bottom
-    ) {
-        if (!isUser) {
+    if (isUser) {
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.End
+        ) {
             Box(
                 Modifier
-                    .size(38.dp)
-                    .clip(CircleShape)
+                    .fillMaxWidth(widthFraction)
+                    .height(40.dp)
+                    .clip(
+                        RoundedCornerShape(
+                            topStart = 20.dp,
+                            topEnd = 20.dp,
+                            bottomStart = 20.dp,
+                            bottomEnd = 6.dp
+                        )
+                    )
                     .evaShimmer()
             )
-            Spacer(Modifier.width(8.dp))
         }
-        Box(
-            Modifier
-                .fillMaxWidth(widthFraction)
-                .height(44.dp)
-                .clip(
-                    if (isUser) {
-                        RoundedCornerShape(topStart = 18.dp, topEnd = 18.dp, bottomStart = 18.dp, bottomEnd = 5.dp)
-                    } else {
-                        RoundedCornerShape(topStart = 18.dp, topEnd = 18.dp, bottomStart = 5.dp, bottomEnd = 18.dp)
-                    }
-                )
-                .evaShimmer()
-        )
+    } else {
+        // Assistant skeleton mirrors the plain-text layout: bare text bars,
+        // no bubble box.
+        Column(Modifier.fillMaxWidth()) {
+            Box(
+                Modifier
+                    .fillMaxWidth(widthFraction)
+                    .height(15.dp)
+                    .clip(RoundedCornerShape(6.dp))
+                    .evaShimmer()
+            )
+            Spacer(Modifier.height(6.dp))
+            Box(
+                Modifier
+                    .fillMaxWidth(widthFraction * 0.6f)
+                    .height(15.dp)
+                    .clip(RoundedCornerShape(6.dp))
+                    .evaShimmer()
+            )
+        }
     }
 }
 
