@@ -136,64 +136,21 @@ fun EvaPage(
                     modifier = Modifier.fillMaxSize()
                 )
             }
-            // Aurora field: three slow-drifting brand-colored blobs over a deep
-            // base gradient. The ambient "alive" backdrop of the whole app.
-            val aurora = rememberInfiniteTransition(label = "eva-aurora")
-            val drift1 by aurora.animateFloat(
-                initialValue = 0f,
-                targetValue = 1f,
-                animationSpec = infiniteRepeatable(
-                    animation = tween(durationMillis = 11000, easing = LinearEasing),
-                    repeatMode = RepeatMode.Reverse
-                ),
-                label = "aurora-a"
-            )
-            val drift2 by aurora.animateFloat(
-                initialValue = 0f,
-                targetValue = 1f,
-                animationSpec = infiniteRepeatable(
-                    animation = tween(durationMillis = 15000, easing = LinearEasing),
-                    repeatMode = RepeatMode.Reverse
-                ),
-                label = "aurora-b"
-            )
-            val drift3 by aurora.animateFloat(
-                initialValue = 0f,
-                targetValue = 1f,
-                animationSpec = infiniteRepeatable(
-                    animation = tween(durationMillis = 8500, easing = LinearEasing),
-                    repeatMode = RepeatMode.Reverse
-                ),
-                label = "aurora-c"
-            )
-            val light = isEvaLight()
+            // Calm backdrop: deep base gradient with a single, static brand
+            // wash at the top. Quiet by design — no ambient animation.
             val baseTop = evaPageTop()
             val baseMid = evaPageMid()
             val baseBottom = evaPageBottom()
-            val blob1 = EvaColors.Purple.copy(alpha = if (light) 0.10f else 0.20f)
-            val blob2 = EvaColors.Pink.copy(alpha = if (light) 0.08f else 0.14f)
-            val blob3 = EvaColors.Coral.copy(alpha = if (light) 0.05f else 0.09f)
+            val wash = EvaColors.Purple.copy(alpha = if (isEvaLight()) 0.05f else 0.10f)
             Box(
                 modifier = Modifier
                     .fillMaxSize()
                     .drawBehind {
                         drawRect(Brush.verticalGradient(listOf(baseTop, baseMid, baseBottom)))
-                        val w = size.width
-                        val h = size.height
                         drawCircle(
-                            brush = Brush.radialGradient(listOf(blob1, Color.Transparent)),
-                            radius = w * (0.85f + 0.10f * drift1),
-                            center = Offset(w * (0.22f + 0.16f * drift1), h * (0.06f + 0.04f * drift2))
-                        )
-                        drawCircle(
-                            brush = Brush.radialGradient(listOf(blob2, Color.Transparent)),
-                            radius = w * (0.75f + 0.12f * drift2),
-                            center = Offset(w * (0.85f - 0.18f * drift2), h * (0.30f + 0.06f * drift1))
-                        )
-                        drawCircle(
-                            brush = Brush.radialGradient(listOf(blob3, Color.Transparent)),
-                            radius = w * (0.70f + 0.10f * drift3),
-                            center = Offset(w * (0.15f + 0.20f * drift3), h * (0.62f - 0.08f * drift3))
+                            brush = Brush.radialGradient(listOf(wash, Color.Transparent)),
+                            radius = size.width * 1.15f,
+                            center = Offset(size.width * 0.5f, -size.height * 0.04f)
                         )
                     }
             )

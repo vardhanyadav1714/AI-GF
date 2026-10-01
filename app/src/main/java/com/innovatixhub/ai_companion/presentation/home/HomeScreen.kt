@@ -41,8 +41,11 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalFocusManager
 import androidx.compose.ui.platform.LocalView
 import androidx.compose.ui.res.painterResource
+import androidx.compose.ui.text.SpanStyle
 import androidx.compose.ui.text.TextStyle
+import androidx.compose.ui.text.buildAnnotatedString
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.withStyle
 import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.text.style.TextAlign
@@ -133,15 +136,19 @@ fun HomeScreen(
                     Spacer(Modifier.height(4.dp))
                     StaggeredAppear(delayMillis = 90) {
                         Text(
-                            "I am ${companion.name}",
-                            fontSize = 40.sp,
-                            lineHeight = 44.sp,
-                            fontWeight = FontWeight.ExtraBold,
-                            style = TextStyle(
-                                brush = Brush.linearGradient(
-                                    listOf(EvaColors.Purple, EvaColors.Pink, EvaColors.Coral)
-                                )
-                            )
+                            buildAnnotatedString {
+                                withStyle(SpanStyle(color = evaText())) { append("I am ") }
+                                withStyle(
+                                    SpanStyle(
+                                        brush = Brush.linearGradient(
+                                            listOf(EvaColors.Purple, EvaColors.Pink, EvaColors.Coral)
+                                        )
+                                    )
+                                ) { append(companion.name) }
+                            },
+                            fontSize = 38.sp,
+                            lineHeight = 42.sp,
+                            fontWeight = FontWeight.ExtraBold
                         )
                     }
                     StaggeredAppear(delayMillis = 180) {
