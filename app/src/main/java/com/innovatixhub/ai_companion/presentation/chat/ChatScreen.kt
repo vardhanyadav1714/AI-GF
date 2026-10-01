@@ -250,6 +250,16 @@ fun ChatScreen(controller: EvaAppController, scope: CoroutineScope) {
                         ChatSkeleton()
                     }
                 }
+                if (!controller.chatsLoading && chatMessages.isEmpty()) {
+                    item(key = "chat-empty") {
+                        ChatEmptyState(
+                            companion = companion,
+                            onStarter = { text ->
+                                scope.launch { controller.sendMessage(text) }
+                            }
+                        )
+                    }
+                }
                 var previousDateLabel: String? = null
                 chatMessages.forEach { message ->
                     val dateLabel = formatDateChip(message.createdAtMillis)
@@ -613,6 +623,7 @@ fun ChatComposer(
     val bringIntoViewRequester = remember { BringIntoViewRequester() }
     val composerScope = rememberCoroutineScope()
     val hapticTick = rememberEvaHaptic()
+    val focusManager = LocalFocusManager.current
 
     Column(
         modifier = Modifier
@@ -624,14 +635,10 @@ fun ChatComposer(
         AnimatedVisibility(visible = emojiPickerOpen) {
             PickerStrip(
                 items = listOf(
-                    "\uD83D\uDC95",
-                    "\uD83D\uDC96",
-                    "\uD83D\uDE0A",
-                    "\uD83D\uDE0D",
-                    "\uD83E\uDD70",
-                    "\u2728",
-                    "\uD83D\uDE18",
-                    "\uD83E\uDD17"
+                    "\uD83D\uDC96", "\uD83D\uDC95", "\uD83E\uDD70", "\uD83D\uDE0D", "\uD83D\uDE18", "\uD83D\uDE0A",
+                    "\uD83E\uDD7A", "\uD83D\uDE22", "\uD83D\uDE2D", "\uD83D\uDE02", "\uD83D\uDE48", "\uD83E\uDEE3",
+                    "\u2728", "\uD83D\uDD25", "\uD83C\uDF39", "\uD83D\uDC8B", "\uD83E\uDD17", "\uD83C\uDF89",
+                    "\uD83D\uDC4D", "\uD83D\uDE4F", "\uD83D\uDCAF", "\uD83C\uDF19", "\u2B50", "\u2615"
                 ),
                 onPick = { emoji ->
                     onDraftChange(draft + emoji)
@@ -669,7 +676,12 @@ fun ChatComposer(
 
                 else -> Row(verticalAlignment = Alignment.CenterVertically) {
                     IconButton(
-                        onClick = { emojiPickerOpen = !emojiPickerOpen },
+                        onClick = {
+                            // Drop text focus so the keyboard and the emoji
+                            // panel never fight for the bottom of the screen.
+                            if (!emojiPickerOpen) focusManager.clearFocus()
+                            emojiPickerOpen = !emojiPickerOpen
+                        },
                         modifier = Modifier.size(42.dp)
                     ) {
                         Icon(
@@ -884,26 +896,96 @@ fun VoicePreviewComposer(
 
 @Composable
 fun PickerStrip(items: List<String>, onPick: (String) -> Unit) {
-    Row(
-        modifier = Modifier
-            .padding(bottom = 8.dp)
-            .horizontalScroll(rememberScrollState()),
-        horizontalArrangement = Arrangement.spacedBy(8.dp)
+    val hapticTick = rememberEvaHaptic()
+    Column(
+        modifier = Modifier.padding(bottom = 8.dp),
+        verticalArrangement = Arrangement.spacedBy(8.dp)
     ) {
-        items.forEach { item ->
+        items.chunked(6).forEach { rowItems ->
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.spacedBy(8.dp)
+            ) {
+                rowItems.forEach { item ->
+                    val interactionSource = rememberEvaInteractionSource()
+                    Box(
+                        modifier = Modifier
+                            .weight(1f)
+                            .aspectRatio(1f)
+                            .pressScale(interactionSource = interactionSource, pressedScale = 0.85f)
+                            .clip(RoundedCornerShape(16.dp))
+                            .background(evaGlass())
+                            .border(BorderStroke(1.dp, evaBorder()), RoundedCornerShape(16.dp))
+                            .clickable(interactionSource = interactionSource, indication = null) {
+                                hapticTick()
+                                onPick(item)
+                            },
+                        contentAlignment = Alignment.Center
+                    ) {
+                        Text(item, fontSize = 24.sp)
+                    }
+                }
+            }
+        }
+    }
+}
+
+/** Welcoming empty state with one-tap ice-breakers for fresh conversations. */
+@Composable
+fun ChatEmptyState(companion: CompanionProfile, onStarter: (String) -> Unit) {
+    Column(
+        modifier = Modifier.fillMaxWidth(),
+        horizontalAlignment = Alignment.CenterHorizontally
+    ) {
+        Spacer(Modifier.height(16.dp))
+        Box(
+            modifier = Modifier
+                .size(96.dp)
+                .clip(CircleShape)
+                .background(EvaColors.Gradient)
+                .padding(3.dp)
+        ) {
+            Image(
+                painter = painterResource(companion.imageRes),
+                contentDescription = companion.name,
+                contentScale = ContentScale.Crop,
+                modifier = Modifier
+                    .fillMaxSize()
+                    .clip(CircleShape)
+            )
+        }
+        Spacer(Modifier.height(14.dp))
+        Text(
+            "Say hi to ${companion.name}",
+            color = evaText(),
+            fontSize = 20.sp,
+            fontWeight = FontWeight.ExtraBold
+        )
+        Spacer(Modifier.height(5.dp))
+        Text(
+            "Break the ice with one of these",
+            color = evaMuted(),
+            fontSize = 13.sp,
+            textAlign = TextAlign.Center
+        )
+        Spacer(Modifier.height(16.dp))
+        listOf(
+            "Hey ${companion.name}! How was your day?",
+            "I missed you",
+            "Tell me something interesting"
+        ).forEach { starter ->
             val interactionSource = rememberEvaInteractionSource()
             GlassCard(
                 modifier = Modifier
-                    .size(52.dp)
-                    .pressScale(interactionSource = interactionSource, pressedScale = 0.88f)
-                    .clickable(interactionSource = interactionSource, indication = null) { onPick(item) },
-                padding = PaddingValues(0.dp),
+                    .fillMaxWidth()
+                    .pressScale(interactionSource = interactionSource, pressedScale = 0.97f)
+                    .clickable(interactionSource = interactionSource, indication = null) { onStarter(starter) },
+                padding = PaddingValues(horizontal = 14.dp, vertical = 12.dp),
                 radius = 18.dp
             ) {
-                Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
-                    Text(item, fontSize = 25.sp)
-                }
+                Text(starter, color = evaText(), fontSize = 14.sp, fontWeight = FontWeight.SemiBold)
             }
+            Spacer(Modifier.height(8.dp))
         }
     }
 }

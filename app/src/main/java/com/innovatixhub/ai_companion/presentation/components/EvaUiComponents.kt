@@ -323,7 +323,15 @@ fun EvaBottomNav(active: EvaTab, onSelect: (EvaTab) -> Unit) {
             .navigationBarsPadding()
             .padding(start = 18.dp, end = 18.dp, bottom = 8.dp),
         padding = PaddingValues(horizontal = 5.dp, vertical = 5.dp),
-        radius = 24.dp
+        radius = 24.dp,
+        // Near-opaque fill so content scrolling underneath (especially in
+        // landscape) stays readable instead of muddying through the glass.
+        glassOverride = if (isEvaLight()) {
+            Color.White.copy(alpha = 0.9f)
+        } else {
+            Color(0xFF17121F).copy(alpha = 0.94f)
+        },
+        borderOverride = if (isEvaLight()) Color.Black.copy(alpha = 0.1f) else Color.White.copy(alpha = 0.12f)
     ) {
         Row {
             items.forEach { item ->
