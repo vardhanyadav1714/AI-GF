@@ -166,9 +166,6 @@ fun GlassCard(
     borderOverride: Color? = null,
     content: @Composable () -> Unit
 ) {
-    // A faint top-edge highlight gives dark glass cards depth without drop
-    // shadows. Skipped entirely in light mode, where it reads as a gray box.
-    val drawHighlight = !isEvaLight()
     Surface(
         modifier = modifier,
         shape = RoundedCornerShape(radius),
@@ -178,20 +175,7 @@ fun GlassCard(
         tonalElevation = 0.dp,
         shadowElevation = 0.dp
     ) {
-        Box(
-            modifier = Modifier
-                .padding(padding)
-                .drawBehind {
-                    if (drawHighlight) {
-                        drawRect(
-                            Brush.verticalGradient(
-                                0f to Color.White.copy(alpha = 0.07f),
-                                0.4f to Color.Transparent
-                            )
-                        )
-                    }
-                }
-        ) {
+        Box(modifier = Modifier.padding(padding)) {
             content()
         }
     }
