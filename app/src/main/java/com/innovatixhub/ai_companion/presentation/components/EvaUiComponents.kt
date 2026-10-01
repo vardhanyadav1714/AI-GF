@@ -141,15 +141,21 @@ fun EvaPage(
             val baseTop = evaPageTop()
             val baseMid = evaPageMid()
             val baseBottom = evaPageBottom()
-            val wash = EvaColors.Purple.copy(alpha = if (isEvaLight()) 0.05f else 0.10f)
+            val wash = EvaColors.Purple.copy(alpha = if (isEvaLight()) 0.035f else 0.10f)
             Box(
                 modifier = Modifier
                     .fillMaxSize()
                     .drawBehind {
                         drawRect(Brush.verticalGradient(listOf(baseTop, baseMid, baseBottom)))
+                        // Intermediate stops keep the wash from showing a hard
+                        // circular edge against light backgrounds.
                         drawCircle(
-                            brush = Brush.radialGradient(listOf(wash, Color.Transparent)),
-                            radius = size.width * 1.15f,
+                            brush = Brush.radialGradient(
+                                0f to wash,
+                                0.55f to wash.copy(alpha = wash.alpha * 0.35f),
+                                1f to Color.Transparent
+                            ),
+                            radius = size.width * 1.35f,
                             center = Offset(size.width * 0.5f, -size.height * 0.04f)
                         )
                     }
@@ -172,8 +178,9 @@ fun GlassCard(
     borderOverride: Color? = null,
     content: @Composable () -> Unit
 ) {
-    // A faint top-edge highlight gives glass cards depth without drop shadows.
-    val topHighlight = if (isEvaLight()) Color.Black.copy(alpha = 0.04f) else Color.White.copy(alpha = 0.07f)
+    // A faint top-edge highlight gives dark glass cards depth without drop
+    // shadows. Skipped entirely in light mode, where it reads as a gray box.
+    val drawHighlight = !isEvaLight()
     Surface(
         modifier = modifier,
         shape = RoundedCornerShape(radius),
@@ -187,12 +194,14 @@ fun GlassCard(
             modifier = Modifier
                 .padding(padding)
                 .drawBehind {
-                    drawRect(
-                        Brush.verticalGradient(
-                            0f to topHighlight,
-                            0.4f to Color.Transparent
+                    if (drawHighlight) {
+                        drawRect(
+                            Brush.verticalGradient(
+                                0f to Color.White.copy(alpha = 0.07f),
+                                0.4f to Color.Transparent
+                            )
                         )
-                    )
+                    }
                 }
         ) {
             content()
