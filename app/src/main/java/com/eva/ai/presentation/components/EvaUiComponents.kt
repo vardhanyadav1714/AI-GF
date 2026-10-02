@@ -753,35 +753,6 @@ fun ProfileRow(
 }
 
 @Composable
-fun CallAction(
-    icon: ImageVector,
-    label: String,
-    active: Boolean,
-    onClick: () -> Unit
-) {
-    Column(
-        modifier = Modifier.width(82.dp),
-        horizontalAlignment = Alignment.CenterHorizontally
-    ) {
-        IconGlassButton(
-            icon = icon,
-            onClick = onClick,
-            color = if (active) EvaColors.Pink else Color.White
-        )
-        Spacer(Modifier.height(8.dp))
-        Text(
-            label,
-            color = Color.White,
-            fontWeight = FontWeight.SemiBold,
-            fontSize = 12.sp,
-            maxLines = 1,
-            overflow = TextOverflow.Ellipsis,
-            textAlign = TextAlign.Center
-        )
-    }
-}
-
-@Composable
 fun EvaTextField(
     value: String,
     onValueChange: (String) -> Unit,

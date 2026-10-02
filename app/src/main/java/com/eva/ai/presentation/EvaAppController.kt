@@ -32,7 +32,6 @@ class EvaAppController @Inject constructor(
     var notice by mutableStateOf<String?>(null)
     var activeTab by mutableStateOf(EvaTab.Home)
     var premiumOpen by mutableStateOf(false)
-    var callOpen by mutableStateOf(false)
 
     /** null = follow the system theme; true/false = explicit user override. */
     var lightMode by mutableStateOf(settingsStore.lightModePref())

@@ -49,7 +49,6 @@ suspend fun EvaAppController.openConversationFromNotification(conversationId: St
 suspend fun EvaAppController.openConversation(conversationId: String) {
     activeTab = EvaTab.Chat
     premiumOpen = false
-    callOpen = false
     conversations.firstOrNull { it.id == conversationId }?.let { preview ->
         selectedCompanion = companionById(preview.companionId)
         persistSelectedCompanion()
@@ -101,7 +100,6 @@ suspend fun EvaAppController.sendMessage(quickText: String? = null) {
 
     activeTab = EvaTab.Chat
     premiumOpen = false
-    callOpen = false
     draft = ""
     sending = true
     messages.add(ChatMessage(text = cleanText, fromUser = true))
@@ -172,8 +170,7 @@ suspend fun EvaAppController.reportLastAssistantReply() {
 suspend fun EvaAppController.sendVoiceNote(
     audioBytes: ByteArray,
     mimeType: String = "audio/mp4",
-    voiceSeconds: Int = max(1, audioBytes.size / 8000),
-    stayInCall: Boolean = false
+    voiceSeconds: Int = max(1, audioBytes.size / 8000)
 ): VoiceSendResult? {
     if (audioBytes.isEmpty()) {
         notice = "I could not hear anything. Try again."
@@ -187,7 +184,6 @@ suspend fun EvaAppController.sendVoiceNote(
 
     activeTab = EvaTab.Chat
     premiumOpen = false
-    if (!stayInCall) callOpen = false
     sending = true
     messages.add(
         ChatMessage(

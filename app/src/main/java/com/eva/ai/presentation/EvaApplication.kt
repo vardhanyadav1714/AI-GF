@@ -62,7 +62,6 @@ import com.eva.ai.domain.logic.*
 import com.eva.ai.domain.model.*
 import com.eva.ai.presentation.*
 import com.eva.ai.presentation.auth.*
-import com.eva.ai.presentation.call.*
 import com.eva.ai.presentation.chat.*
 import com.eva.ai.presentation.components.*
 import com.eva.ai.presentation.home.*
@@ -191,7 +190,6 @@ fun EvaShell(
             targetState = EvaShellState(
                 tab = controller.activeTab,
                 premiumOpen = controller.premiumOpen,
-                callOpen = controller.callOpen,
                 lightMode = controller.lightMode ?: !isSystemInDarkTheme(),
                 companionId = controller.selectedCompanion.id
             ),
@@ -212,11 +210,6 @@ fun EvaShell(
             label = "eva-shell"
         ) { _ ->
             when {
-                controller.callOpen -> CallScreen(
-                    controller = controller,
-                    scope = scope,
-                    onClose = { controller.callOpen = false }
-                )
                 controller.premiumOpen -> PremiumScreen(
                     subscription = controller.subscriptionState,
                     busy = controller.subscriptionBusy,
@@ -248,8 +241,7 @@ fun EvaShell(
                     onPremium = { controller.premiumOpen = true },
                     onQuickMessage = { text ->
                         scope.launch { controller.sendMessage(text) }
-                    },
-                    onVoiceNotes = { controller.callOpen = true }
+                    }
                 )
 
                 controller.activeTab == EvaTab.Chat -> ChatScreen(controller, scope)
@@ -263,7 +255,6 @@ fun EvaShell(
 
         AnimatedVisibility(
             visible = !controller.premiumOpen &&
-                !controller.callOpen &&
                 controller.activeTab != EvaTab.Chat,
             modifier = Modifier.align(Alignment.BottomCenter)
         ) {
@@ -272,7 +263,6 @@ fun EvaShell(
                 onSelect = { tab ->
                     controller.activeTab = tab
                     controller.premiumOpen = false
-                    controller.callOpen = false
                 }
             )
         }
@@ -283,7 +273,6 @@ fun EvaShell(
 private data class EvaShellState(
     val tab: EvaTab,
     val premiumOpen: Boolean,
-    val callOpen: Boolean,
     val lightMode: Boolean,
     val companionId: String
 )

@@ -63,7 +63,6 @@ import com.eva.ai.domain.logic.*
 import com.eva.ai.domain.model.*
 import com.eva.ai.presentation.*
 import com.eva.ai.presentation.auth.*
-import com.eva.ai.presentation.call.*
 import com.eva.ai.presentation.chat.*
 import com.eva.ai.presentation.components.*
 import com.eva.ai.presentation.home.*
@@ -93,8 +92,7 @@ fun HomeScreen(
     onCompanionSelect: (CompanionProfile) -> Unit,
     onChat: () -> Unit,
     onPremium: () -> Unit,
-    onQuickMessage: (String) -> Unit,
-    onVoiceNotes: () -> Unit
+    onQuickMessage: (String) -> Unit
 ) {
     val hapticTick = rememberEvaHaptic()
 
@@ -174,20 +172,12 @@ fun HomeScreen(
                 HeroImageCard(companion, onChat)
             }
             item {
-                Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
-                    HomeAction(
-                        icon = Icons.Rounded.GraphicEq,
-                        label = "Voice call",
-                        onClick = onVoiceNotes,
-                        modifier = Modifier.weight(1f)
-                    )
-                    HomeAction(
-                        icon = Icons.Rounded.CardGiftcard,
-                        label = "Premium",
-                        onClick = onPremium,
-                        modifier = Modifier.weight(1f)
-                    )
-                }
+                HomeAction(
+                    icon = Icons.Rounded.CardGiftcard,
+                    label = "Premium",
+                    onClick = onPremium,
+                    modifier = Modifier.fillMaxWidth()
+                )
             }
             item {
                 MoodPanel { message ->

@@ -65,7 +65,6 @@ import com.eva.ai.domain.logic.*
 import com.eva.ai.domain.model.*
 import com.eva.ai.presentation.*
 import com.eva.ai.presentation.auth.*
-import com.eva.ai.presentation.call.*
 import com.eva.ai.presentation.chat.*
 import com.eva.ai.presentation.components.*
 import com.eva.ai.presentation.home.*
@@ -232,7 +231,6 @@ fun ChatScreen(controller: EvaAppController, scope: CoroutineScope) {
                 companion = companion,
                 live = controller.backendLive,
                 onBack = { controller.activeTab = EvaTab.Home },
-                onCall = { controller.callOpen = true },
                 onReport = {
                     scope.launch {
                         controller.reportLastAssistantReply()
@@ -340,7 +338,6 @@ fun ChatHeader(
     companion: CompanionProfile,
     live: Boolean,
     onBack: () -> Unit,
-    onCall: () -> Unit,
     onReport: () -> Unit
 ) {
     var menuOpen by remember { mutableStateOf(false) }
@@ -377,11 +374,6 @@ fun ChatHeader(
                 )
             }
         }
-        IconGlassButton(
-            icon = Icons.Rounded.Call,
-            onClick = onCall,
-            size = 42.dp
-        )
         Spacer(Modifier.width(8.dp))
         Box {
             IconGlassButton(

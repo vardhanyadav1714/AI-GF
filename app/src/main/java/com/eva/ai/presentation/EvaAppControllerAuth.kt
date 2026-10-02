@@ -110,7 +110,6 @@ suspend fun EvaAppController.signOut() {
     pendingConversationId = null
     activeTab = EvaTab.Home
     premiumOpen = false
-    callOpen = false
     backendLive = false
 }
 
