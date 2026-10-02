@@ -22,7 +22,7 @@ app/google-services.json
 app/release/
 *.jks
 *.keystore
-eva
+/eva
 
 # Claude Code local session files
 .claude/
