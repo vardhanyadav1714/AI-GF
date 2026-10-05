@@ -33,6 +33,11 @@ import com.eva.ai.presentation.signInWithGoogle
 import com.eva.ai.presentation.startPremiumSubscription
 import com.eva.ai.presentation.syncDeviceToken
 import com.eva.ai.presentation.verifyGooglePlayPurchase
+import com.eva.ai.presentation.verifyRazorpayPurchase
+import com.razorpay.Checkout
+import com.razorpay.PaymentData
+import com.razorpay.PaymentResultWithDataListener
+import org.json.JSONObject
 import com.eva.ai.presentation.EvaApplication
 import com.eva.ai.presentation.components.EvaColors
 import com.eva.ai.data.billing.PlayBillingManager
@@ -45,20 +50,18 @@ import com.eva.ai.domain.model.AuthState
 import java.security.SecureRandom
 
 @AndroidEntryPoint
-class MainActivity : ComponentActivity() {
+class MainActivity : ComponentActivity(), PaymentResultWithDataListener {
     @Inject
     lateinit var controller: EvaAppController
     private val credentialManager by lazy { CredentialManager.create(this) }
     private val purchaseVerificationMutex = Mutex()
+    private var razorpaySubscriptionId: String? = null
+    private var razorpayAccountId: String? = null
     private val playBilling: PlayBillingManager by lazy {
         PlayBillingManager(
             context = this,
             onAlternativeBilling = { token ->
-                lifecycleScope.launch {
-                    controller.startPremiumSubscription(token)?.let { url ->
-                        startActivity(Intent(Intent.ACTION_VIEW, android.net.Uri.parse(url)))
-                    }
-                }
+                openRazorpaySubscription(token)
             },
             onPurchased = { purchaseToken, productId ->
                 lifecycleScope.launch {
@@ -86,6 +89,8 @@ class MainActivity : ComponentActivity() {
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
+        razorpaySubscriptionId = savedInstanceState?.getString("razorpaySubscriptionId")
+        razorpayAccountId = savedInstanceState?.getString("razorpayAccountId")
         enableEdgeToEdge()
         window.statusBarColor = EvaColors.Black.toArgb()
         window.navigationBarColor = EvaColors.Black.toArgb()
@@ -149,6 +154,67 @@ class MainActivity : ComponentActivity() {
     override fun onDestroy() {
         playBilling.close()
         super.onDestroy()
+    }
+
+    override fun onSaveInstanceState(outState: Bundle) {
+        outState.putString("razorpaySubscriptionId", razorpaySubscriptionId)
+        outState.putString("razorpayAccountId", razorpayAccountId)
+        super.onSaveInstanceState(outState)
+    }
+
+    private fun openRazorpaySubscription(externalTransactionToken: String) {
+        if (!BuildConfig.ALTERNATIVE_BILLING_ENABLED || externalTransactionToken.isBlank() || razorpaySubscriptionId != null) return
+        val user = (controller.authState as? AuthState.SignedIn)?.user ?: return
+        lifecycleScope.launch {
+            val checkout = controller.startPremiumSubscription(externalTransactionToken) ?: return@launch
+            if ((controller.authState as? AuthState.SignedIn)?.user?.id != user.id) return@launch
+            if (!checkout.keyId.startsWith("rzp_") || !checkout.subscriptionId.startsWith("sub_")) {
+                controller.notice = "Native checkout is not configured yet. Please try again later."
+                return@launch
+            }
+            razorpaySubscriptionId = checkout.subscriptionId
+            razorpayAccountId = user.id
+            runCatching {
+                Checkout.preload(applicationContext)
+                val options = JSONObject()
+                    .put("name", "Eva")
+                    .put("description", "Monthly Premium subscription - renews until cancelled")
+                    .put("subscription_id", checkout.subscriptionId)
+                    .put("prefill", JSONObject().put("email", user.email).put("name", user.name))
+                    .put("theme", JSONObject().put("color", "#b72c50"))
+                Checkout().apply { setKeyID(checkout.keyId) }.open(this@MainActivity, options)
+            }.onFailure {
+                razorpaySubscriptionId = null
+                razorpayAccountId = null
+                controller.notice = "Could not open Razorpay checkout. Please try again."
+            }
+        }
+    }
+
+    override fun onPaymentSuccess(paymentId: String?, paymentData: PaymentData?) {
+        val subscriptionId = razorpaySubscriptionId
+        val accountId = razorpayAccountId
+        val signature = paymentData?.signature
+        razorpaySubscriptionId = null
+        razorpayAccountId = null
+        if (paymentId.isNullOrBlank() || signature.isNullOrBlank() || subscriptionId.isNullOrBlank() ||
+            accountId != (controller.authState as? AuthState.SignedIn)?.user?.id) {
+            controller.notice = "Sign in with the purchasing account and refresh payment status to confirm your payment."
+            return
+        }
+        lifecycleScope.launch {
+            purchaseVerificationMutex.withLock {
+                controller.verifyRazorpayPurchase(paymentId, subscriptionId, signature)
+            }
+        }
+    }
+
+    override fun onPaymentError(code: Int, response: String?, paymentData: PaymentData?) {
+        razorpaySubscriptionId = null
+        razorpayAccountId = null
+        controller.notice = if (code == Checkout.PAYMENT_CANCELED) "Checkout cancelled. Refresh payment status if your bank shows a debit."
+            else "Payment was not confirmed. Refresh payment status before trying again."
+        // Provider responses can contain personal payment information; do not log them.
     }
 
     private fun openGoogleSignIn() {

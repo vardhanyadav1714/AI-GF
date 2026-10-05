@@ -215,6 +215,21 @@ fun PremiumScreen(
                 )
             }
             item {
+                val context = LocalContext.current
+                Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                    Text(
+                        "Renews monthly until cancelled. Cancel before the next renewal to stop the next charge. If renewal has already been charged, cancellation stops later renewals. Access continues through the paid period. No discretionary refunds; legal and provider exceptions apply.",
+                        color = evaMuted(), fontSize = 12.sp, lineHeight = 18.sp,
+                        textAlign = TextAlign.Center, modifier = Modifier.fillMaxWidth()
+                    )
+                    TextButton(onClick = {
+                        openExternalUrl(context, "https://merigf.com/refund-policy") {
+                            android.widget.Toast.makeText(context, "Visit merigf.com/refund-policy", android.widget.Toast.LENGTH_LONG).show()
+                        }
+                    }) { Text("Cancellation & Refund Policy", color = EvaColors.Pink) }
+                }
+            }
+            item {
                 onGooglePlay?.let {
                     GradientButton(
                         icon = Icons.Rounded.PlayCircle,

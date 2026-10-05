@@ -94,7 +94,9 @@ data class SubscriptionState(
 
 data class SubscriptionCheckout(
     val subscription: SubscriptionState,
-    val checkoutUrl: String
+    val checkoutUrl: String,
+    val keyId: String = "",
+    val subscriptionId: String = ""
 )
 
 data class VoiceRecordingPreview(

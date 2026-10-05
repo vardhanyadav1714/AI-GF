@@ -84,6 +84,11 @@ dependencies {
     implementation(libs.firebase.messaging)
     implementation(libs.googleid)
     implementation("com.android.billingclient:billing-ktx:9.1.0")
+    implementation("com.razorpay:checkout:1.6.41") {
+        exclude(group = "com.razorpay", module = "standard-core")
+    }
+    // Replace the SDK's LATEST dependency with the version verified for this release.
+    implementation("com.razorpay:standard-core:1.7.19")
     implementation(libs.hilt.android)
     add("ksp", libs.hilt.compiler)
     add("ksp", "com.squareup:kotlinpoet:1.13.2")

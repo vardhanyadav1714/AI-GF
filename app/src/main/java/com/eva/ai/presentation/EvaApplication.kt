@@ -220,14 +220,7 @@ fun EvaShell(
                     onBack = { controller.premiumOpen = false },
                     onContinue = {
                         scope.launch {
-                            val checkoutUrl = controller.startPremiumSubscription()
-                            if (!checkoutUrl.isNullOrBlank()) {
-                                openExternalUrl(
-                                    context = context,
-                                    url = checkoutUrl,
-                                    onFailure = { controller.notice = "Could not open Razorpay checkout." }
-                                )
-                            }
+                            controller.notice = "Use Google Play's payment selection to start your subscription."
                         }
                     },
                     onRefresh = {

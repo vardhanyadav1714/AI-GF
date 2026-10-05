@@ -1,6 +1,7 @@
 package com.eva.ai.presentation
 
 import com.eva.ai.domain.model.AuthState
+import com.eva.ai.domain.model.SubscriptionCheckout
 import com.eva.ai.domain.logic.cleanMessage
 
 suspend fun EvaAppController.refreshSubscription(silent: Boolean = false): Boolean {
@@ -50,27 +51,38 @@ suspend fun EvaAppController.cancelPremiumRenewal() {
     subscriptionBusy = false
 }
 
-suspend fun EvaAppController.startPremiumSubscription(externalTransactionToken: String? = null): String? {
+suspend fun EvaAppController.startPremiumSubscription(externalTransactionToken: String? = null): SubscriptionCheckout? {
     if (subscriptionBusy) return null
     if (authState !is AuthState.SignedIn) {
         notice = "Sign in before starting premium."
         return null
     }
     subscriptionBusy = true
-    var checkoutUrl: String? = null
+    var result: SubscriptionCheckout? = null
     runCatching {
         api.startSubscription(externalTransactionToken)
     }.onSuccess { checkout ->
         subscriptionState = checkout.subscription
-        checkoutUrl = checkout.checkoutUrl.ifBlank { checkout.subscription.checkoutUrl }
         if (checkout.subscription.active) {
             notice = "Premium is already active."
-        } else if (checkoutUrl.isNullOrBlank()) {
-            notice = "Razorpay checkout link was not returned."
+        } else {
+            result = checkout
         }
     }.onFailure { error ->
         notice = error.cleanMessage("Could not start subscription.")
     }
     subscriptionBusy = false
-    return checkoutUrl
+    return result
+}
+
+suspend fun EvaAppController.verifyRazorpayPurchase(paymentId: String, subscriptionId: String, signature: String) {
+    subscriptionBusy = true
+    runCatching { api.verifyRazorpay(paymentId, subscriptionId, signature) }.onSuccess { state ->
+        subscriptionState = state
+        freeMessagesRemaining = if (state.active) null else state.freeRemaining
+        notice = if (state.active) "Premium is active." else "Payment verification is pending. Refresh payment status shortly."
+    }.onFailure {
+        notice = "Payment could not be confirmed yet. Refresh payment status before trying another payment."
+    }
+    subscriptionBusy = false
 }

@@ -165,12 +165,22 @@ class MeriGfApi @Inject constructor(
         val checkout = data.optJSONObject("checkout")
         return SubscriptionCheckout(
             subscription = subscription,
-            checkoutUrl = checkout?.bestString("checkoutUrl", "shortUrl", default = "").orEmpty()
+            checkoutUrl = checkout?.bestString("checkoutUrl", "shortUrl", default = "").orEmpty(),
+            keyId = checkout?.optString("keyId").orEmpty(),
+            subscriptionId = checkout?.optString("subscriptionId").orEmpty()
         )
     }
 
     suspend fun cancelSubscription(): SubscriptionState {
         val data = requestObject("POST", "/subscriptions/cancel", JSONObject())
+        return parseSubscriptionState(data.optJSONObject("subscription") ?: data, data.optJSONObject("usage"))
+    }
+
+    suspend fun verifyRazorpay(paymentId: String, subscriptionId: String, signature: String): SubscriptionState {
+        val data = requestObject("POST", "/subscriptions/razorpay/verify", JSONObject()
+            .put("razorpayPaymentId", paymentId)
+            .put("razorpaySubscriptionId", subscriptionId)
+            .put("razorpaySignature", signature))
         return parseSubscriptionState(data.optJSONObject("subscription") ?: data, data.optJSONObject("usage"))
     }
 
