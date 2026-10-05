@@ -113,6 +113,7 @@ fun AuthScreen(
     onVerify: (String, String) -> Unit
 ) {
     var mode by remember { mutableStateOf(AuthMode.Login) }
+    val context = LocalContext.current
     var name by remember { mutableStateOf("") }
     var email by remember { mutableStateOf("") }
     var code by remember { mutableStateOf("") }
@@ -245,13 +246,33 @@ fun AuthScreen(
                         }
 
                         Text(
-                            text = "Email login uses a one-time code.",
+                            text = "By continuing, you agree to our Terms & Conditions and acknowledge our Cancellation & Refund Policy. For adults 18 and over. Conversations are with AI.",
                             color = evaMuted(),
                             fontSize = 12.sp,
                             lineHeight = 17.sp,
                             textAlign = TextAlign.Center,
                             modifier = Modifier.fillMaxWidth()
                         )
+                        Column(
+                            modifier = Modifier.fillMaxWidth(),
+                            horizontalAlignment = Alignment.CenterHorizontally
+                        ) {
+                            listOf(
+                                "Terms & Conditions" to "https://merigf.com/terms",
+                                "Cancellation & Refund Policy" to "https://merigf.com/refund-policy"
+                            ).forEach { (label, url) ->
+                                TextButton(onClick = {
+                                    openExternalUrl(context, url) {
+                                        android.widget.Toast.makeText(
+                                            context, "Could not open your browser. Visit $url",
+                                            android.widget.Toast.LENGTH_LONG
+                                        ).show()
+                                    }
+                                }) {
+                                    Text(label, color = EvaColors.Pink, textAlign = TextAlign.Center)
+                                }
+                            }
+                        }
                     }
                 }
             }
