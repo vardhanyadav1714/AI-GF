@@ -39,6 +39,9 @@ import com.eva.ai.data.billing.PlayBillingManager
 import dagger.hilt.android.AndroidEntryPoint
 import javax.inject.Inject
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.sync.Mutex
+import kotlinx.coroutines.sync.withLock
+import com.eva.ai.domain.model.AuthState
 import java.security.SecureRandom
 
 @AndroidEntryPoint
@@ -46,6 +49,7 @@ class MainActivity : ComponentActivity() {
     @Inject
     lateinit var controller: EvaAppController
     private val credentialManager by lazy { CredentialManager.create(this) }
+    private val purchaseVerificationMutex = Mutex()
     private val playBilling: PlayBillingManager by lazy {
         PlayBillingManager(
             context = this,
@@ -58,12 +62,16 @@ class MainActivity : ComponentActivity() {
             },
             onPurchased = { purchaseToken, productId ->
                 lifecycleScope.launch {
+                    purchaseVerificationMutex.withLock {
                     val verified = controller.verifyGooglePlayPurchase(purchaseToken, productId)
                     if (verified) {
                         playBilling.acknowledge(purchaseToken)
                     }
+                    }
                 }
-            }
+            },
+            onRestoreError = { message -> controller.notice = message },
+            accountId = { (controller.authState as? AuthState.SignedIn)?.user?.id }
         )
     }
     private val notificationPermissionLauncher = registerForActivityResult(
@@ -97,6 +105,9 @@ class MainActivity : ComponentActivity() {
             LaunchedEffect(Unit) {
                 controller.bootstrap()
             }
+            LaunchedEffect(controller.authState) {
+                if (controller.authState is AuthState.SignedIn) playBilling.restorePurchases()
+            }
 
             EvaApplication(
                 controller = controller,
@@ -109,6 +120,10 @@ class MainActivity : ComponentActivity() {
                     playBilling.launchSubscribe(this@MainActivity) { message ->
                         controller.notice = message
                     }
+                },
+                onRestorePurchases = {
+                    playBilling.restorePurchases()
+                    lifecycleScope.launch { controller.refreshSubscription() }
                 }
             )
         }
@@ -126,8 +141,14 @@ class MainActivity : ComponentActivity() {
         if (::controller.isInitialized) {
             lifecycleScope.launch {
                 controller.refreshSubscription(silent = true)
+                playBilling.restorePurchases()
             }
         }
+    }
+
+    override fun onDestroy() {
+        playBilling.close()
+        super.onDestroy()
     }
 
     private fun openGoogleSignIn() {

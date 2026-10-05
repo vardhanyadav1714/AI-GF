@@ -9,6 +9,15 @@ plugins {
 
 apply(plugin = "com.google.gms.google-services")
 
+val evaUploadStore = providers.environmentVariable("EVA_UPLOAD_STORE_FILE").orNull
+val evaUploadStorePassword = providers.environmentVariable("EVA_UPLOAD_STORE_PASSWORD").orNull
+val evaUploadAlias = providers.environmentVariable("EVA_UPLOAD_KEY_ALIAS").orNull
+val evaUploadKeyPassword = providers.environmentVariable("EVA_UPLOAD_KEY_PASSWORD").orNull
+val evaSigningValues = listOf(evaUploadStore, evaUploadStorePassword, evaUploadAlias, evaUploadKeyPassword)
+require(evaSigningValues.none { !it.isNullOrBlank() } || evaSigningValues.all { !it.isNullOrBlank() }) {
+    "Set all four EVA_UPLOAD signing environment variables together."
+}
+
 extensions.configure<ApplicationExtension>("android") {
     namespace = "com.eva.ai"
     compileSdk {
@@ -19,15 +28,27 @@ extensions.configure<ApplicationExtension>("android") {
         applicationId = "com.eva.ai"
         minSdk = 24
         targetSdk = 37
-        versionCode = 1
-        versionName = "1.0"
+        versionCode = providers.gradleProperty("evaVersionCode").orElse(providers.environmentVariable("EVA_VERSION_CODE")).orElse("1").get().toInt()
+        versionName = providers.gradleProperty("evaVersionName").orElse(providers.environmentVariable("EVA_VERSION_NAME")).orElse("1.0").get()
         buildConfigField("boolean", "ALTERNATIVE_BILLING_ENABLED", providers.gradleProperty("alternativeBillingEnabled").orElse("false").get())
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
     }
 
+    if (evaSigningValues.all { !it.isNullOrBlank() }) {
+        signingConfigs.create("evaUpload") {
+            storeFile = file(evaUploadStore!!)
+            storePassword = evaUploadStorePassword
+            keyAlias = evaUploadAlias
+            keyPassword = evaUploadKeyPassword
+        }
+    }
+
     buildTypes {
         release {
+            if (evaSigningValues.all { !it.isNullOrBlank() }) {
+                signingConfig = signingConfigs.getByName("evaUpload")
+            }
             optimization {
                 enable = false
             }

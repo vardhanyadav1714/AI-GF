@@ -169,6 +169,11 @@ class MeriGfApi @Inject constructor(
         )
     }
 
+    suspend fun cancelSubscription(): SubscriptionState {
+        val data = requestObject("POST", "/subscriptions/cancel", JSONObject())
+        return parseSubscriptionState(data.optJSONObject("subscription") ?: data, data.optJSONObject("usage"))
+    }
+
     suspend fun verifyGooglePlay(purchaseToken: String, productId: String): SubscriptionState {
         val data = requestObject(
             method = "POST",
@@ -417,6 +422,9 @@ class MeriGfApi @Inject constructor(
         val usage = usageOverride ?: json.optJSONObject("usage")
         return SubscriptionState(
             active = json.optBoolean("active", false),
+            provider = json.optString("provider", "none"),
+            autoRenew = json.optBoolean("autoRenew", false),
+            cancelAtPeriodEnd = json.optBoolean("cancelAtPeriodEnd", false),
             status = json.optString("status", "none"),
             providerSubscriptionId = json.bestString("providerSubscriptionId", "subscriptionId", default = ""),
             checkoutUrl = json.bestString("checkoutUrl", default = ""),

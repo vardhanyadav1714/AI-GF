@@ -52,6 +52,7 @@ import androidx.compose.ui.unit.sp
 import androidx.core.content.ContextCompat
 import androidx.core.view.WindowInsetsControllerCompat
 import com.eva.ai.R
+import com.eva.ai.BuildConfig
 import com.eva.ai.data.audio.*
 import com.eva.ai.data.remote.*
 import com.eva.ai.data.settings.*
@@ -89,10 +90,20 @@ fun PremiumScreen(
     onContinue: () -> Unit,
     onRefresh: () -> Unit,
     onGooglePlay: (() -> Unit)? = null,
-    googlePlayBusy: Boolean = false
+    googlePlayBusy: Boolean = false,
+    onRestore: () -> Unit = {},
+    onCancel: () -> Unit = {}
 ) {
+    var confirmCancel by remember { mutableStateOf(false) }
+    if (confirmCancel) {
+        AlertDialog(onDismissRequest = { confirmCancel = false },
+            title = { Text("Cancel future renewals?") },
+            text = { Text("Your current paid period remains available until its end date.") },
+            confirmButton = { TextButton(onClick = { confirmCancel = false; onCancel() }) { Text("Cancel renewals") } },
+            dismissButton = { TextButton(onClick = { confirmCancel = false }) { Text("Keep membership") } })
+    }
     val plan = subscription?.plan ?: SubscriptionPlan(
-        planId = "plan_TRv3HKpujDyFoS",
+        planId = "eva_premium_monthly",
         name = "Eva Premium Monthly",
         amount = 49900,
         formattedAmount = "INR 499",
@@ -136,7 +147,7 @@ fun PremiumScreen(
                         .fillMaxWidth()
                 ) {
                     Column {
-                        PremiumFeature(Icons.Rounded.Chat, "Unlimited Chats", "Continue after your 10 free messages")
+                        PremiumFeature(Icons.Rounded.Chat, "Premium Membership", "One monthly membership for your account")
                         PremiumFeature(Icons.Rounded.Psychology, "Shared Memory", "Eva remembers you across every companion")
                         PremiumFeature(Icons.Rounded.GraphicEq, "Voice Notes", "Send voice and hear audio replies")
                         PremiumFeature(Icons.Rounded.Star, "Custom Personality", "Make Eva your way")
@@ -196,27 +207,50 @@ fun PremiumScreen(
                     label = when {
                         active -> "Premium Active"
                         busy -> "Opening Checkout"
-                        else -> "Continue ${plan.formattedAmount}"
+                        BuildConfig.ALTERNATIVE_BILLING_ENABLED -> "Choose payment method"
+                        else -> "Continue with Google Play"
                     },
                     enabled = !busy && !active,
-                    onClick = onContinue
+                    onClick = onGooglePlay ?: onContinue
                 )
             }
             item {
-                onGooglePlay?.let { onPlay ->
+                onGooglePlay?.let {
                     GradientButton(
                         icon = Icons.Rounded.PlayCircle,
                         label = when {
-                            active -> "Premium Active"
-                            googlePlayBusy -> "Opening Google Play"
-                            else -> "Pay with Google Play"
+                            googlePlayBusy -> "Checking purchases"
+                            else -> "Restore purchases"
                         },
-                        enabled = !active && !googlePlayBusy,
-                        onClick = onPlay
+                        enabled = !googlePlayBusy,
+                        onClick = onRestore
                     )
                 }
             }
             item {
+                val context = LocalContext.current
+                subscription?.currentEnd?.let { end ->
+                    Text("Current period ends ${end.substringBefore('T')}", color = evaMuted(), modifier = Modifier.fillMaxWidth())
+                }
+                if (subscription?.cancelAtPeriodEnd == true) {
+                    Text("Future renewals are cancelled", color = evaMuted())
+                } else if (subscription?.provider == "razorpay" && active) {
+                    TextButton(onClick = { confirmCancel = true }, enabled = !busy, modifier = Modifier.fillMaxWidth()) {
+                        Icon(Icons.Rounded.Cancel, contentDescription = null)
+                        Spacer(Modifier.width(8.dp))
+                        Text("Cancel future renewals")
+                    }
+                }
+                if (subscription?.provider == "google_play") {
+                    TextButton(onClick = {
+                        runCatching { context.startActivity(Intent(Intent.ACTION_VIEW,
+                            Uri.parse("https://play.google.com/store/account/subscriptions?sku=eva_premium_monthly&package=com.eva.ai"))) }
+                    }, modifier = Modifier.fillMaxWidth()) {
+                        Icon(Icons.Rounded.Settings, contentDescription = null)
+                        Spacer(Modifier.width(8.dp))
+                        Text("Manage in Google Play")
+                    }
+                }
                 Text(
                     if (busy) "Checking subscription..." else "Refresh Subscription Status",
                     color = EvaColors.Pink.copy(alpha = 0.9f),

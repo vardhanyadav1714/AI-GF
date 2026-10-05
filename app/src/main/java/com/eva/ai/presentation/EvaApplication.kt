@@ -89,7 +89,8 @@ fun EvaApplication(
     controller: EvaAppController,
     scope: CoroutineScope,
     onGoogleSignIn: () -> Unit,
-    onGooglePlaySubscribe: () -> Unit
+    onGooglePlaySubscribe: () -> Unit,
+    onRestorePurchases: () -> Unit = {}
 ) {
     // No explicit override yet: follow the system theme, including live changes.
     val effectiveLightMode = controller.lightMode ?: !isSystemInDarkTheme()
@@ -131,7 +132,8 @@ fun EvaApplication(
                             controller = controller,
                             user = auth.user,
                             scope = scope,
-                            onGooglePlaySubscribe = onGooglePlaySubscribe
+                            onGooglePlaySubscribe = onGooglePlaySubscribe,
+                            onRestorePurchases = onRestorePurchases
                         )
                     }
                 }
@@ -173,7 +175,8 @@ fun EvaShell(
     controller: EvaAppController,
     user: EvaUser,
     scope: CoroutineScope,
-    onGooglePlaySubscribe: () -> Unit
+    onGooglePlaySubscribe: () -> Unit,
+    onRestorePurchases: () -> Unit
 ) {
     val context = LocalContext.current
     Box(Modifier.fillMaxSize()) {
@@ -230,7 +233,9 @@ fun EvaShell(
                     onRefresh = {
                         scope.launch { controller.refreshSubscription() }
                     },
-                    onGooglePlay = onGooglePlaySubscribe
+                    onGooglePlay = onGooglePlaySubscribe,
+                    onRestore = onRestorePurchases,
+                    onCancel = { scope.launch { controller.cancelPremiumRenewal() } }
                 )
 
                 controller.activeTab == EvaTab.Home -> HomeScreen(

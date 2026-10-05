@@ -15,6 +15,7 @@ import com.android.billingclient.api.PurchasesUpdatedListener
 import com.android.billingclient.api.QueryProductDetailsParams
 import com.android.billingclient.api.QueryPurchasesParams
 import com.eva.ai.BuildConfig
+import java.security.MessageDigest
 
 /**
  * Thin wrapper around Google Play Billing for the Eva Premium monthly
@@ -25,20 +26,33 @@ class PlayBillingManager(
     context: Context,
     private val onPurchased: (purchaseToken: String, productId: String) -> Unit,
     private val onRestoreError: (String) -> Unit = {},
-    private val onAlternativeBilling: (String) -> Unit = {}
+    private val onAlternativeBilling: (String) -> Unit = {},
+    private val accountId: () -> String? = { null }
 ) {
     private val mainHandler = Handler(Looper.getMainLooper())
 
     companion object {
         const val PREMIUM_PRODUCT_ID = "eva_premium_monthly"
+        const val MONTHLY_BASE_PLAN_ID = "monthly"
     }
 
     private val listener = PurchasesUpdatedListener { billingResult, purchases ->
-        if (billingResult.responseCode != BillingClient.BillingResponseCode.OK) return@PurchasesUpdatedListener
+        if (billingResult.responseCode == BillingClient.BillingResponseCode.ITEM_ALREADY_OWNED) {
+            restorePurchases()
+            return@PurchasesUpdatedListener
+        }
+        if (billingResult.responseCode != BillingClient.BillingResponseCode.OK) {
+            mainHandler.post { onRestoreError(if (billingResult.responseCode == BillingClient.BillingResponseCode.USER_CANCELED)
+                "Purchase cancelled." else "Google Play could not complete the purchase. Please try again.") }
+            return@PurchasesUpdatedListener
+        }
+        if (purchases?.any { it.purchaseState == Purchase.PurchaseState.PENDING } == true) {
+            mainHandler.post { onRestoreError("Payment is pending. Premium activates after Google Play confirms payment.") }
+        }
         val bought = purchases?.filter { it.purchaseState == Purchase.PurchaseState.PURCHASED } ?: return@PurchasesUpdatedListener
         mainHandler.post {
             bought.forEach { purchase ->
-                val productId = purchase.products.firstOrNull() ?: return@forEach
+                val productId = purchase.products.firstOrNull { it == PREMIUM_PRODUCT_ID } ?: return@forEach
                 onPurchased(purchase.purchaseToken, productId)
             }
         }
@@ -46,6 +60,7 @@ class PlayBillingManager(
 
     private val billingClient: BillingClient = BillingClient.newBuilder(context)
         .setListener(listener)
+        .enableAutoServiceReconnection()
         .enablePendingPurchases(PendingPurchasesParams.newBuilder().enableOneTimeProducts().build())
         .apply {
             if (BuildConfig.ALTERNATIVE_BILLING_ENABLED) {
@@ -60,8 +75,11 @@ class PlayBillingManager(
         if (billingClient.isReady) return
         billingClient.startConnection(object : BillingClientStateListener {
             override fun onBillingSetupFinished(result: BillingResult) {
-                if (result.responseCode != BillingClient.BillingResponseCode.OK) return
-                queryAlreadyOwned()
+                if (result.responseCode != BillingClient.BillingResponseCode.OK) {
+                    mainHandler.post { onRestoreError("Google Play billing is unavailable. Please try again.") }
+                    return
+                }
+                restorePurchases()
             }
 
             override fun onBillingServiceDisconnected() = Unit
@@ -69,6 +87,11 @@ class PlayBillingManager(
     }
 
     fun launchSubscribe(activity: Activity, onError: (String) -> Unit) {
+        val userId = accountId()?.takeIf { it.isNotBlank() }
+        if (userId == null) {
+            onError("Sign in before starting Premium.")
+            return
+        }
         if (!billingClient.isReady) {
             connect()
             onError("Google Play is connecting. Try again in a moment.")
@@ -87,31 +110,43 @@ class PlayBillingManager(
             .build()
 
         billingClient.queryProductDetailsAsync(params) { result, productDetailsResult ->
-            val details = productDetailsResult.productDetailsList.firstOrNull()
+            val details = productDetailsResult.productDetailsList.firstOrNull { it.productId == PREMIUM_PRODUCT_ID }
             if (result.responseCode != BillingClient.BillingResponseCode.OK || details == null) {
                 mainHandler.post {
                     onError("The Eva Premium plan is not available in Google Play yet.")
                 }
                 return@queryProductDetailsAsync
             }
+            val offer = details.subscriptionOfferDetails?.firstOrNull {
+                it.basePlanId == MONTHLY_BASE_PLAN_ID && it.offerId == null
+            } ?: details.subscriptionOfferDetails?.firstOrNull { it.basePlanId == MONTHLY_BASE_PLAN_ID }
+            if (offer == null) {
+                mainHandler.post { onError("The monthly Premium plan is unavailable for this Google Play account.") }
+                return@queryProductDetailsAsync
+            }
 
             val flowParams = BillingFlowParams.newBuilder()
+                .setObfuscatedAccountId(MessageDigest.getInstance("SHA-256")
+                    .digest("eva-google-play:v1:$userId".toByteArray(Charsets.UTF_8))
+                    .joinToString("") { "%02x".format(it.toInt() and 0xff) })
                 .setProductDetailsParamsList(
                     listOf(
                         BillingFlowParams.ProductDetailsParams.newBuilder()
                             .setProductDetails(details)
-                            .apply {
-                                details.subscriptionOfferDetails?.firstOrNull()?.offerToken?.let {
-                                    setOfferToken(it)
-                                }
-                            }
+                            .setOfferToken(offer.offerToken)
                             .build()
                     )
                 )
                 .build()
 
             mainHandler.post {
-                billingClient.launchBillingFlow(activity, flowParams)
+                if (accountId() != userId) {
+                    onError("Your account changed. Start checkout again.")
+                    return@post
+                }
+                val launched = billingClient.launchBillingFlow(activity, flowParams)
+                if (launched.responseCode == BillingClient.BillingResponseCode.ITEM_ALREADY_OWNED) restorePurchases()
+                else if (launched.responseCode != BillingClient.BillingResponseCode.OK) onError("Google Play checkout could not open. Please try again.")
             }
         }
     }
@@ -130,7 +165,12 @@ class PlayBillingManager(
         }
     }
 
-    private fun queryAlreadyOwned() {
+    fun restorePurchases() {
+        if (accountId().isNullOrBlank()) return
+        if (!billingClient.isReady) {
+            connect()
+            return
+        }
         billingClient.queryPurchasesAsync(
             QueryPurchasesParams.newBuilder().setProductType(BillingClient.ProductType.SUBS).build()
         ) { result, purchases ->
@@ -142,10 +182,15 @@ class PlayBillingManager(
             if (owned.isEmpty()) return@queryPurchasesAsync
             mainHandler.post {
                 owned.forEach { purchase ->
-                    val productId = purchase.products.firstOrNull() ?: return@forEach
+                    val productId = purchase.products.firstOrNull { it == PREMIUM_PRODUCT_ID } ?: return@forEach
                     onPurchased(purchase.purchaseToken, productId)
                 }
             }
         }
+    }
+
+    fun close() {
+        mainHandler.removeCallbacksAndMessages(null)
+        billingClient.endConnection()
     }
 }

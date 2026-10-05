@@ -40,6 +40,16 @@ suspend fun EvaAppController.verifyGooglePlayPurchase(purchaseToken: String, pro
     return verified
 }
 
+suspend fun EvaAppController.cancelPremiumRenewal() {
+    if (subscriptionBusy || authState !is AuthState.SignedIn) return
+    subscriptionBusy = true
+    runCatching { api.cancelSubscription() }.onSuccess { state ->
+        subscriptionState = state
+        notice = "Future renewals are cancelled. Your current paid period remains available."
+    }.onFailure { error -> notice = error.cleanMessage("Could not cancel the renewal. Please try again.") }
+    subscriptionBusy = false
+}
+
 suspend fun EvaAppController.startPremiumSubscription(externalTransactionToken: String? = null): String? {
     if (subscriptionBusy) return null
     if (authState !is AuthState.SignedIn) {
