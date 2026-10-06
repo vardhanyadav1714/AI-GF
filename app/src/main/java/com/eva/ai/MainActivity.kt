@@ -143,12 +143,18 @@ class MainActivity : ComponentActivity(), PaymentResultWithDataListener {
 
     override fun onResume() {
         super.onResume()
+        EvaNotificationCenter.setAppForeground(true)
         if (::controller.isInitialized) {
             lifecycleScope.launch {
                 controller.refreshSubscription(silent = true)
                 playBilling.restorePurchases()
             }
         }
+    }
+
+    override fun onPause() {
+        EvaNotificationCenter.setAppForeground(false)
+        super.onPause()
     }
 
     override fun onDestroy() {

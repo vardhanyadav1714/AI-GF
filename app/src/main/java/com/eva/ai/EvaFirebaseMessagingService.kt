@@ -12,6 +12,7 @@ import androidx.core.app.NotificationCompat
 import androidx.core.app.NotificationManagerCompat
 import androidx.core.content.ContextCompat
 import com.eva.ai.data.remote.MeriGfApi
+import com.eva.ai.domain.logic.shouldSuppressChatNotification
 import com.google.firebase.messaging.FirebaseMessagingService
 import com.google.firebase.messaging.RemoteMessage
 import dagger.hilt.android.AndroidEntryPoint
@@ -71,6 +72,7 @@ object EvaNotificationCenter {
     const val EXTRA_CONVERSATION_ID = "conversationId"
 
     private val activeConversationId = MutableStateFlow<String?>(null)
+    private val appForeground = MutableStateFlow(false)
     private val conversationEvents = MutableSharedFlow<String>(extraBufferCapacity = 4)
 
     fun ensureChannels(context: Context) {
@@ -103,6 +105,10 @@ object EvaNotificationCenter {
         activeConversationId.value = conversationId
     }
 
+    fun setAppForeground(foreground: Boolean) {
+        appForeground.value = foreground
+    }
+
     fun openConversations(): MutableSharedFlow<String> = conversationEvents
 
     /**
@@ -111,7 +117,7 @@ object EvaNotificationCenter {
      * notification for a message the user is already looking at.
      */
     fun tryDeliverToOpenConversation(conversationId: String): Boolean {
-        if (activeConversationId.value != conversationId) return false
+        if (!shouldSuppressChatNotification(appForeground.value, activeConversationId.value, conversationId, conversationEvents.subscriptionCount.value > 0)) return false
         return conversationEvents.tryEmit(conversationId)
     }
 
@@ -130,7 +136,7 @@ object EvaNotificationCenter {
         }
         val pendingIntent = PendingIntent.getActivity(
             context,
-            0,
+            conversationId?.hashCode() ?: 0,
             intent,
             PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
         )
@@ -153,9 +159,10 @@ object EvaNotificationCenter {
     }
 
     fun canPostNotifications(context: Context): Boolean =
-        Build.VERSION.SDK_INT < Build.VERSION_CODES.TIRAMISU ||
+        NotificationManagerCompat.from(context).areNotificationsEnabled() &&
+        (Build.VERSION.SDK_INT < Build.VERSION_CODES.TIRAMISU ||
             ContextCompat.checkSelfPermission(
                 context,
                 Manifest.permission.POST_NOTIFICATIONS
-            ) == PackageManager.PERMISSION_GRANTED
+            ) == PackageManager.PERMISSION_GRANTED)
 }
