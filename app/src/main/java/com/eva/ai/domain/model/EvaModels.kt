@@ -33,7 +33,9 @@ data class ChatMessage(
     val streaming: Boolean = false,
     val voiceSeconds: Int = 0,
     val audioBase64: String = "",
-    val audioMimeType: String = ""
+    val audioMimeType: String = "",
+    val mediaPath: String = "",
+    val mediaMimeType: String = ""
 )
 
 data class ConversationPreview(

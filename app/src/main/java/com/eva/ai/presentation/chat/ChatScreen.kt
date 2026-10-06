@@ -7,6 +7,7 @@ import android.content.Intent
 import android.content.pm.PackageManager
 import android.media.MediaPlayer
 import android.media.MediaRecorder
+import android.graphics.BitmapFactory
 import android.net.Uri
 import android.os.Build
 import android.os.Bundle
@@ -39,6 +40,8 @@ import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.graphics.toArgb
+import androidx.compose.ui.graphics.asImageBitmap
+import androidx.compose.ui.graphics.ImageBitmap
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
@@ -72,6 +75,7 @@ import com.eva.ai.presentation.premium.*
 import com.eva.ai.presentation.settings.*
 import com.eva.ai.ui.theme.AICompanionTheme
 import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
@@ -93,6 +97,7 @@ fun ChatScreen(controller: EvaAppController, scope: CoroutineScope) {
     val density = LocalDensity.current
     val companion = controller.selectedCompanion
     val listState = rememberLazyListState()
+    var loadingAudioId by remember { mutableStateOf<String?>(null) }
     val imeBottom = WindowInsets.ime.getBottom(density)
     val recorder = remember(context) { EvaAudioRecorder(context) }
     var recording by remember { mutableStateOf(false) }
@@ -288,6 +293,7 @@ fun ChatScreen(controller: EvaAppController, scope: CoroutineScope) {
                                 MessageBubble(
                                     message = message,
                                     companion = companion,
+                                    api = controller.api,
                                     onPlayAudio = { audioMessage ->
                                         if (audioMessage.audioBase64.isNotBlank()) {
                                             playBase64Audio(
@@ -295,6 +301,16 @@ fun ChatScreen(controller: EvaAppController, scope: CoroutineScope) {
                                                 base64Audio = audioMessage.audioBase64,
                                                 mimeType = audioMessage.audioMimeType.ifBlank { "audio/mp4" }
                                             )
+                                        } else if (audioMessage.mediaPath.isNotBlank() && loadingAudioId == null) {
+                                            scope.launch {
+                                                loadingAudioId = audioMessage.id
+                                                try {
+                                                    val bytes = controller.api.mediaBytes(audioMessage.mediaPath)
+                                                    playAudioBytes(context, bytes, audioMessage.audioMimeType)
+                                                } catch (error: CancellationException) { throw error }
+                                                catch (_: Exception) { controller.notice = "Voice recording could not be loaded. Please try again." }
+                                                finally { loadingAudioId = null }
+                                            }
                                         }
                                     }
                                 )
@@ -409,6 +425,7 @@ fun ChatHeader(
 fun MessageBubble(
     message: ChatMessage,
     companion: CompanionProfile,
+    api: MeriGfApi? = null,
     onPlayAudio: (ChatMessage) -> Unit = {}
 ) {
     val fromUser = message.fromUser
@@ -422,6 +439,7 @@ fun MessageBubble(
             modifier = Modifier.fillMaxWidth(),
             horizontalAlignment = Alignment.Start
         ) {
+            if (api != null && message.mediaMimeType.startsWith("image/")) StoredChatImage(message, api)
             when (message.kind) {
                 MessageKind.Voice -> GlassCard(
                     padding = PaddingValues(horizontal = 12.dp, vertical = 10.dp),
@@ -431,7 +449,7 @@ fun MessageBubble(
                         seconds = message.voiceSeconds,
                         fromUser = false,
                         companionName = companion.name,
-                        canPlay = message.audioBase64.isNotBlank(),
+                        canPlay = message.audioBase64.isNotBlank() || message.mediaPath.isNotBlank(),
                         onPlay = { onPlayAudio(message) }
                     )
                 }
@@ -479,12 +497,13 @@ fun MessageBubble(
                 .padding(start = 15.dp, top = 11.dp, end = 15.dp, bottom = 9.dp),
             horizontalAlignment = Alignment.End
         ) {
+            if (api != null && message.mediaMimeType.startsWith("image/")) StoredChatImage(message, api)
             when (message.kind) {
                 MessageKind.Voice -> VoiceNoteBubble(
                     seconds = message.voiceSeconds,
                     fromUser = true,
                     companionName = companion.name,
-                    canPlay = message.audioBase64.isNotBlank(),
+                    canPlay = message.audioBase64.isNotBlank() || message.mediaPath.isNotBlank(),
                     onPlay = { onPlayAudio(message) }
                 )
 
@@ -505,6 +524,33 @@ fun MessageBubble(
             )
         }
     }
+}
+
+@Composable
+private fun StoredChatImage(message: ChatMessage, api: MeriGfApi) {
+    var bitmap by remember(message.mediaPath) { mutableStateOf<ImageBitmap?>(null) }
+    var failed by remember(message.mediaPath) { mutableStateOf(false) }
+    var attempt by remember(message.mediaPath) { mutableStateOf(0) }
+    LaunchedEffect(message.mediaPath, attempt) {
+        failed = false
+        try {
+            val bytes = api.mediaBytes(message.mediaPath)
+            bitmap = withContext(Dispatchers.IO) {
+                val options = BitmapFactory.Options().apply { inJustDecodeBounds = true }
+                BitmapFactory.decodeByteArray(bytes, 0, bytes.size, options)
+                require(options.outWidth > 0 && options.outHeight > 0)
+                options.inJustDecodeBounds = false
+                options.inSampleSize = 1
+                while (options.outWidth / options.inSampleSize > 1024 || options.outHeight / options.inSampleSize > 1024) options.inSampleSize *= 2
+                BitmapFactory.decodeByteArray(bytes, 0, bytes.size, options)?.asImageBitmap() ?: error("Invalid image")
+            }
+        } catch (error: CancellationException) { throw error }
+        catch (_: Exception) { failed = true }
+    }
+    val image = bitmap
+    if (image != null) Image(image, contentDescription = "Chat attachment", modifier = Modifier.widthIn(max = 280.dp).heightIn(max = 320.dp), contentScale = ContentScale.Fit)
+    else if (failed) IconButton(onClick = { attempt++ }) { Icon(Icons.Rounded.Refresh, contentDescription = "Retry loading image") }
+    else CircularProgressIndicator(modifier = Modifier.size(24.dp))
 }
 
 @Composable

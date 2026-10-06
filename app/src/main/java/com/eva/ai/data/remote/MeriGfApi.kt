@@ -232,6 +232,10 @@ class MeriGfApi @Inject constructor(
                 val item = array.optJSONObject(index) ?: continue
                 val role = item.optString("role", item.optString("sender", "assistant"))
                 val content = item.bestString("content", "text", default = "")
+                val media = item.optJSONObject("media")
+                val mediaId = media?.optString("id").orEmpty()
+                val mediaMime = media?.optString("mimeType").orEmpty()
+                val mediaPath = if (Regex("[a-fA-F0-9]{24}").matches(mediaId)) "/api/v1/media/$mediaId" else ""
                 if (content.isBlank()) continue
                 add(
                     ChatMessage(
@@ -244,7 +248,10 @@ class MeriGfApi @Inject constructor(
                             "timestamp",
                             "time"
                         ) ?: System.currentTimeMillis(),
-                        kind = MessageKind.Text
+                        kind = if (mediaPath.isNotBlank() && mediaMime.startsWith("audio/")) MessageKind.Voice else MessageKind.Text,
+                        audioMimeType = mediaMime,
+                        mediaPath = mediaPath,
+                        mediaMimeType = mediaMime
                     )
                 )
             }
@@ -495,6 +502,39 @@ class MeriGfApi @Inject constructor(
     ): JSONObject {
         val data = requestJson(method, path, body, authorized, allowRefresh)
         return data as? JSONObject ?: throw ApiException("Backend returned an unexpected response.")
+    }
+
+    suspend fun mediaBytes(path: String, allowRefresh: Boolean = true): ByteArray = withContext(Dispatchers.IO) {
+        require(Regex("/api/v1/media/[a-fA-F0-9]{24}").matches(path)) { "Invalid media path" }
+        val connection = (URI("$baseUrl${path.removePrefix("/api/v1")}").toURL().openConnection() as HttpURLConnection).apply {
+            connectTimeout = 10_000
+            readTimeout = 30_000
+            instanceFollowRedirects = false
+            savedAccessToken()?.let { setRequestProperty("Authorization", "Bearer $it") }
+        }
+        try {
+            val status = connection.responseCode
+            if (status == 401 && allowRefresh && refreshSessionIfPossible()) {
+                return@withContext mediaBytes(path, false)
+            }
+            if (status !in 200..299) throw ApiException("Stored media could not be loaded. Please try again.", status)
+            val type = connection.contentType.orEmpty().substringBefore(';')
+            if (!type.startsWith("audio/") && type !in listOf("image/png", "image/jpeg", "image/webp")) throw ApiException("Unsupported media response.")
+            val limit = 20 * 1024 * 1024
+            val bytes = connection.inputStream.use { input ->
+                val output = java.io.ByteArrayOutputStream()
+                val buffer = ByteArray(8192)
+                while (true) {
+                    val count = input.read(buffer)
+                    if (count < 0) break
+                    if (output.size() + count > limit) throw ApiException("Invalid media size.")
+                    output.write(buffer, 0, count)
+                }
+                output.toByteArray()
+            }
+            if (bytes.isEmpty() || bytes.size > limit) throw ApiException("Invalid media size.")
+            bytes
+        } finally { connection.disconnect() }
     }
 
     private suspend fun requestJson(
