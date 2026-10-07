@@ -30,7 +30,7 @@ extensions.configure<ApplicationExtension>("android") {
         targetSdk = 37
         versionCode = providers.gradleProperty("evaVersionCode").orElse(providers.environmentVariable("EVA_VERSION_CODE")).orElse("1").get().toInt()
         versionName = providers.gradleProperty("evaVersionName").orElse(providers.environmentVariable("EVA_VERSION_NAME")).orElse("1.0").get()
-        buildConfigField("boolean", "ALTERNATIVE_BILLING_ENABLED", providers.gradleProperty("alternativeBillingEnabled").orElse("false").get())
+        buildConfigField("boolean", "ALTERNATIVE_BILLING_ENABLED", providers.gradleProperty("alternativeBillingEnabled").orElse("true").get())
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
     }

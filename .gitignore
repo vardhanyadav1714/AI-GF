@@ -23,6 +23,9 @@ app/release/
 *.jks
 *.keystore
 /eva
+.env
+.env.*
+!.env.example
 
 # Claude Code local session files
 .claude/

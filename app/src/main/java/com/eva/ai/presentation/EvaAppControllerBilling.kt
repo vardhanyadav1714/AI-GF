@@ -51,7 +51,7 @@ suspend fun EvaAppController.cancelPremiumRenewal() {
     subscriptionBusy = false
 }
 
-suspend fun EvaAppController.startPremiumSubscription(externalTransactionToken: String? = null): SubscriptionCheckout? {
+suspend fun EvaAppController.startPremiumSubscription(externalTransactionToken: String? = null, billingCountryCode: String? = null, billingAdministrativeArea: String? = null): SubscriptionCheckout? {
     if (subscriptionBusy) return null
     if (authState !is AuthState.SignedIn) {
         notice = "Sign in before starting premium."
@@ -60,7 +60,7 @@ suspend fun EvaAppController.startPremiumSubscription(externalTransactionToken: 
     subscriptionBusy = true
     var result: SubscriptionCheckout? = null
     runCatching {
-        api.startSubscription(externalTransactionToken)
+        api.startSubscription(externalTransactionToken, billingCountryCode, billingAdministrativeArea)
     }.onSuccess { checkout ->
         subscriptionState = checkout.subscription
         if (checkout.subscription.active) {

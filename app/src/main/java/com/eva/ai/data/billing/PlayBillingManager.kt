@@ -9,6 +9,7 @@ import com.android.billingclient.api.BillingClient
 import com.android.billingclient.api.BillingClientStateListener
 import com.android.billingclient.api.BillingFlowParams
 import com.android.billingclient.api.BillingResult
+import com.android.billingclient.api.GetBillingConfigParams
 import com.android.billingclient.api.PendingPurchasesParams
 import com.android.billingclient.api.Purchase
 import com.android.billingclient.api.PurchasesUpdatedListener
@@ -26,10 +27,14 @@ class PlayBillingManager(
     context: Context,
     private val onPurchased: (purchaseToken: String, productId: String) -> Unit,
     private val onRestoreError: (String) -> Unit = {},
-    private val onAlternativeBilling: (String) -> Unit = {},
+    private val onAlternativeBilling: (String, String) -> Unit = { _, _ -> },
     private val accountId: () -> String? = { null }
 ) {
     private val mainHandler = Handler(Looper.getMainLooper())
+    private var checkoutAccountId: String? = null
+    private var checkoutInProgress = false
+    private var useUserChoice = false
+    private var closed = false
 
     companion object {
         const val PREMIUM_PRODUCT_ID = "eva_premium_monthly"
@@ -37,6 +42,8 @@ class PlayBillingManager(
     }
 
     private val listener = PurchasesUpdatedListener { billingResult, purchases ->
+        checkoutInProgress = false
+        checkoutAccountId = null
         if (billingResult.responseCode == BillingClient.BillingResponseCode.ITEM_ALREADY_OWNED) {
             restorePurchases()
             return@PurchasesUpdatedListener
@@ -58,14 +65,28 @@ class PlayBillingManager(
         }
     }
 
-    private val billingClient: BillingClient = BillingClient.newBuilder(context)
+    private val standardClient = createClient(context, false)
+    private val userChoiceClientDelegate = lazy { createClient(context, true) }
+    private val userChoiceClient by userChoiceClientDelegate
+    private val billingClient: BillingClient get() = if (useUserChoice) userChoiceClient else standardClient
+
+    private fun createClient(context: Context, userChoice: Boolean): BillingClient = BillingClient.newBuilder(context)
         .setListener(listener)
         .enableAutoServiceReconnection()
         .enablePendingPurchases(PendingPurchasesParams.newBuilder().enableOneTimeProducts().build())
         .apply {
-            if (BuildConfig.ALTERNATIVE_BILLING_ENABLED) {
+            if (userChoice && BuildConfig.ALTERNATIVE_BILLING_ENABLED) {
                 enableUserChoiceBilling { details ->
-                    mainHandler.post { onAlternativeBilling(details.externalTransactionToken) }
+                    mainHandler.post {
+                        val purchasingAccount = checkoutAccountId
+                        checkoutAccountId = null
+                        checkoutInProgress = false
+                        if (purchasingAccount == null || purchasingAccount != accountId()) {
+                            onRestoreError("Your account changed. Start checkout again.")
+                        } else if (details.products.none { it.id == PREMIUM_PRODUCT_ID } || details.externalTransactionToken.isBlank()) {
+                            onRestoreError("Google Play did not return a valid Premium billing choice.")
+                        } else onAlternativeBilling(details.externalTransactionToken, "IN")
+                    }
                 }
             }
         }
@@ -87,6 +108,7 @@ class PlayBillingManager(
     }
 
     fun launchSubscribe(activity: Activity, onError: (String) -> Unit) {
+        if (closed || checkoutInProgress) return
         val userId = accountId()?.takeIf { it.isNotBlank() }
         if (userId == null) {
             onError("Sign in before starting Premium.")
@@ -98,6 +120,33 @@ class PlayBillingManager(
             return
         }
 
+        checkoutInProgress = true
+        billingClient.getBillingConfigAsync(GetBillingConfigParams.newBuilder().build()) { result, config ->
+            mainHandler.post {
+                if (closed) return@post
+                if (result.responseCode != BillingClient.BillingResponseCode.OK || config == null || accountId() != userId) {
+                    checkoutInProgress = false
+                    onError("Could not verify your Google Play billing country. Please try again.")
+                    return@post
+                }
+                // Use this response only for this checkout; never cache it in the user profile.
+                useUserChoice = IndiaBillingPolicy.offerUserChoice(BuildConfig.ALTERNATIVE_BILLING_ENABLED, config.countryCode)
+                if (billingClient.isReady) queryAndLaunch(activity, userId, onError)
+                else billingClient.startConnection(object : BillingClientStateListener {
+                    override fun onBillingSetupFinished(result: BillingResult) {
+                        mainHandler.post {
+                            if (closed) return@post
+                            if (result.responseCode == BillingClient.BillingResponseCode.OK) queryAndLaunch(activity, userId, onError)
+                            else { checkoutInProgress = false; onError("Google Play billing is unavailable. Please try again.") }
+                        }
+                    }
+                    override fun onBillingServiceDisconnected() = Unit
+                })
+            }
+        }
+    }
+
+    private fun queryAndLaunch(activity: Activity, userId: String, onError: (String) -> Unit) {
         val params = QueryProductDetailsParams.newBuilder()
             .setProductList(
                 listOf(
@@ -113,6 +162,7 @@ class PlayBillingManager(
             val details = productDetailsResult.productDetailsList.firstOrNull { it.productId == PREMIUM_PRODUCT_ID }
             if (result.responseCode != BillingClient.BillingResponseCode.OK || details == null) {
                 mainHandler.post {
+                    checkoutInProgress = false
                     onError("The Eva Premium plan is not available in Google Play yet.")
                 }
                 return@queryProductDetailsAsync
@@ -121,7 +171,7 @@ class PlayBillingManager(
                 it.basePlanId == MONTHLY_BASE_PLAN_ID && it.offerId == null
             } ?: details.subscriptionOfferDetails?.firstOrNull { it.basePlanId == MONTHLY_BASE_PLAN_ID }
             if (offer == null) {
-                mainHandler.post { onError("The monthly Premium plan is unavailable for this Google Play account.") }
+                mainHandler.post { checkoutInProgress = false; onError("The monthly Premium plan is unavailable for this Google Play account.") }
                 return@queryProductDetailsAsync
             }
 
@@ -140,11 +190,14 @@ class PlayBillingManager(
                 .build()
 
             mainHandler.post {
-                if (accountId() != userId) {
+                if (closed || accountId() != userId) {
+                    checkoutInProgress = false
                     onError("Your account changed. Start checkout again.")
                     return@post
                 }
+                checkoutAccountId = userId
                 val launched = billingClient.launchBillingFlow(activity, flowParams)
+                if (launched.responseCode != BillingClient.BillingResponseCode.OK) { checkoutAccountId = null; checkoutInProgress = false }
                 if (launched.responseCode == BillingClient.BillingResponseCode.ITEM_ALREADY_OWNED) restorePurchases()
                 else if (launched.responseCode != BillingClient.BillingResponseCode.OK) onError("Google Play checkout could not open. Please try again.")
             }
@@ -190,7 +243,10 @@ class PlayBillingManager(
     }
 
     fun close() {
+        closed = true
+        checkoutAccountId = null
         mainHandler.removeCallbacksAndMessages(null)
-        billingClient.endConnection()
+        standardClient.endConnection()
+        if (userChoiceClientDelegate.isInitialized()) userChoiceClient.endConnection()
     }
 }

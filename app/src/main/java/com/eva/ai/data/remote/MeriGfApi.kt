@@ -155,11 +155,15 @@ class MeriGfApi @Inject constructor(
         return parseSubscriptionState(data)
     }
 
-    suspend fun startSubscription(externalTransactionToken: String? = null): SubscriptionCheckout {
+    suspend fun startSubscription(externalTransactionToken: String? = null, billingCountryCode: String? = null, billingAdministrativeArea: String? = null): SubscriptionCheckout {
         val data = requestObject(
             method = "POST",
             path = "/subscriptions/checkout",
-            body = JSONObject().apply { externalTransactionToken?.let { put("externalTransactionToken", it) } }
+            body = JSONObject().apply {
+                externalTransactionToken?.let { put("externalTransactionToken", it) }
+                billingCountryCode?.let { put("billingCountryCode", it) }
+                billingAdministrativeArea?.let { put("billingAdministrativeArea", it) }
+            }
         )
         val subscription = parseSubscriptionState(data.optJSONObject("subscription") ?: data)
         val checkout = data.optJSONObject("checkout")

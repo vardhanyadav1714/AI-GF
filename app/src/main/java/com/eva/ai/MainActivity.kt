@@ -60,8 +60,8 @@ class MainActivity : ComponentActivity(), PaymentResultWithDataListener {
     private val playBilling: PlayBillingManager by lazy {
         PlayBillingManager(
             context = this,
-            onAlternativeBilling = { token ->
-                openRazorpaySubscription(token)
+            onAlternativeBilling = { token, country ->
+                if (country == "IN") selectBillingState(token)
             },
             onPurchased = { purchaseToken, productId ->
                 lifecycleScope.launch {
@@ -168,11 +168,24 @@ class MainActivity : ComponentActivity(), PaymentResultWithDataListener {
         super.onSaveInstanceState(outState)
     }
 
-    private fun openRazorpaySubscription(externalTransactionToken: String) {
+    private fun selectBillingState(token: String) {
+        val userId = (controller.authState as? AuthState.SignedIn)?.user?.id ?: return
+        android.app.AlertDialog.Builder(this)
+            .setTitle("Billing state / union territory")
+            .setItems(com.eva.ai.data.billing.IndiaBillingPolicy.administrativeAreas.toTypedArray()) { _, index ->
+                if ((controller.authState as? AuthState.SignedIn)?.user?.id == userId) {
+                    openRazorpaySubscription(token, com.eva.ai.data.billing.IndiaBillingPolicy.administrativeAreas[index])
+                }
+            }
+            .setNegativeButton("Cancel") { _, _ -> controller.notice = "Checkout cancelled." }
+            .show()
+    }
+
+    private fun openRazorpaySubscription(externalTransactionToken: String, billingAdministrativeArea: String) {
         if (!BuildConfig.ALTERNATIVE_BILLING_ENABLED || externalTransactionToken.isBlank() || razorpaySubscriptionId != null) return
         val user = (controller.authState as? AuthState.SignedIn)?.user ?: return
         lifecycleScope.launch {
-            val checkout = controller.startPremiumSubscription(externalTransactionToken) ?: return@launch
+            val checkout = controller.startPremiumSubscription(externalTransactionToken, "IN", billingAdministrativeArea) ?: return@launch
             if ((controller.authState as? AuthState.SignedIn)?.user?.id != user.id) return@launch
             if (!checkout.keyId.startsWith("rzp_") || !checkout.subscriptionId.startsWith("sub_")) {
                 controller.notice = "Native checkout is not configured yet. Please try again later."
