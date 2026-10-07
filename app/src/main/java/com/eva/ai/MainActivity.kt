@@ -31,6 +31,7 @@ import com.eva.ai.presentation.openConversationFromNotification
 import com.eva.ai.presentation.refreshSubscription
 import com.eva.ai.presentation.signInWithGoogle
 import com.eva.ai.presentation.startPremiumSubscription
+import com.eva.ai.presentation.userChoiceBillingEnabled
 import com.eva.ai.presentation.syncDeviceToken
 import com.eva.ai.presentation.verifyGooglePlayPurchase
 import com.eva.ai.presentation.verifyRazorpayPurchase
@@ -122,8 +123,13 @@ class MainActivity : ComponentActivity(), PaymentResultWithDataListener {
                 },
                 onGooglePlaySubscribe = {
                     controller.notice = null
-                    playBilling.launchSubscribe(this@MainActivity) { message ->
-                        controller.notice = message
+                    if (!controller.subscriptionBusy) lifecycleScope.launch {
+                        controller.subscriptionBusy = true
+                        val enabled = controller.userChoiceBillingEnabled()
+                        controller.subscriptionBusy = false
+                        playBilling.launchSubscribe(this@MainActivity, enabled) { message ->
+                            controller.notice = message
+                        }
                     }
                 },
                 onRestorePurchases = {

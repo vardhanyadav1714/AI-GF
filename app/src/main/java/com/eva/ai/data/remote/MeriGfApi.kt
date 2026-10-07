@@ -155,6 +155,14 @@ class MeriGfApi @Inject constructor(
         return parseSubscriptionState(data)
     }
 
+    suspend fun userChoiceBillingEnabled(): Boolean {
+        val data = requestObject("GET", "/subscriptions/billing-options")
+        return data.optBoolean("alternativeBillingEnabled", false) &&
+            (0 until (data.optJSONArray("alternativeBillingCountries")?.length() ?: 0)).any {
+                data.optJSONArray("alternativeBillingCountries")?.optString(it) == "IN"
+            }
+    }
+
     suspend fun startSubscription(externalTransactionToken: String? = null, billingCountryCode: String? = null, billingAdministrativeArea: String? = null): SubscriptionCheckout {
         val data = requestObject(
             method = "POST",

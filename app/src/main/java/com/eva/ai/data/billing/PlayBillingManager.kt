@@ -78,6 +78,7 @@ class PlayBillingManager(
             if (userChoice && BuildConfig.ALTERNATIVE_BILLING_ENABLED) {
                 enableUserChoiceBilling { details ->
                     mainHandler.post {
+                        if (closed) return@post
                         val purchasingAccount = checkoutAccountId
                         checkoutAccountId = null
                         checkoutInProgress = false
@@ -93,6 +94,7 @@ class PlayBillingManager(
         .build()
 
     fun connect() {
+        if (closed) return
         if (billingClient.isReady) return
         billingClient.startConnection(object : BillingClientStateListener {
             override fun onBillingSetupFinished(result: BillingResult) {
@@ -107,7 +109,7 @@ class PlayBillingManager(
         })
     }
 
-    fun launchSubscribe(activity: Activity, onError: (String) -> Unit) {
+    fun launchSubscribe(activity: Activity, alternativeBillingAllowed: Boolean = false, onError: (String) -> Unit) {
         if (closed || checkoutInProgress) return
         val userId = accountId()?.takeIf { it.isNotBlank() }
         if (userId == null) {
@@ -130,7 +132,7 @@ class PlayBillingManager(
                     return@post
                 }
                 // Use this response only for this checkout; never cache it in the user profile.
-                useUserChoice = IndiaBillingPolicy.offerUserChoice(BuildConfig.ALTERNATIVE_BILLING_ENABLED, config.countryCode)
+                useUserChoice = IndiaBillingPolicy.offerUserChoice(BuildConfig.ALTERNATIVE_BILLING_ENABLED && alternativeBillingAllowed, config.countryCode)
                 if (billingClient.isReady) queryAndLaunch(activity, userId, onError)
                 else billingClient.startConnection(object : BillingClientStateListener {
                     override fun onBillingSetupFinished(result: BillingResult) {

@@ -4,6 +4,8 @@ import com.eva.ai.domain.model.AuthState
 import com.eva.ai.domain.model.SubscriptionCheckout
 import com.eva.ai.domain.logic.cleanMessage
 
+suspend fun EvaAppController.userChoiceBillingEnabled(): Boolean = runCatching { api.userChoiceBillingEnabled() }.getOrDefault(false)
+
 suspend fun EvaAppController.refreshSubscription(silent: Boolean = false): Boolean {
     if (authState !is AuthState.SignedIn) return false
     if (!silent) subscriptionBusy = true
