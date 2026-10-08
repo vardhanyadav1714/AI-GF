@@ -176,7 +176,22 @@ fun EvaShell(
     onRestorePurchases: () -> Unit
 ) {
     val context = LocalContext.current
+    var trialAcknowledged by remember(user.id) { mutableStateOf(controller.settingsStore.trialNoticeSeen(user.id)) }
+    val freeRemaining = controller.freeMessagesRemaining
     Box(Modifier.fillMaxSize()) {
+        if (!controller.needsDateOfBirth && !controller.premiumOpen && shouldShowTrialNotice(
+                trialAcknowledged, controller.subscriptionState?.active == true, freeRemaining)) {
+            fun acknowledgeTrial() {
+                controller.settingsStore.acknowledgeTrialNotice(user.id)
+                trialAcknowledged = true
+            }
+            AlertDialog(
+                onDismissRequest = { acknowledgeTrial() },
+                title = { Text(if (freeRemaining == 10) "Your first 10 messages are free" else "$freeRemaining free messages remaining") },
+                text = { Text("Your free messages are shared across all companions, including voice notes. After they're used, choose Eva Premium to continue. No payment starts unless you subscribe.") },
+                confirmButton = { TextButton(onClick = { acknowledgeTrial() }) { Text("Start chatting") } }
+            )
+        }
         if (controller.needsDateOfBirth) {
             DateOfBirthDialog(
                 busy = controller.authBusy,

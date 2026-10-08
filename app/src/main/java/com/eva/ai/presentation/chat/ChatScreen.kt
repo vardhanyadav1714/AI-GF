@@ -152,6 +152,7 @@ fun ChatScreen(controller: EvaAppController, scope: CoroutineScope) {
     val startRecording: () -> Unit = {
         when {
             controller.sending -> controller.notice = "Wait for ${companion.name} to finish replying first."
+            controller.shouldOpenPaywallBeforeSend() -> Unit
             ContextCompat.checkSelfPermission(
                 context,
                 Manifest.permission.RECORD_AUDIO
@@ -242,6 +243,12 @@ fun ChatScreen(controller: EvaAppController, scope: CoroutineScope) {
                     }
                 }
             )
+            controller.freeMessagesRemaining?.let { remaining ->
+                Row(Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 4.dp), verticalAlignment = Alignment.CenterVertically) {
+                    Text(if (remaining > 0) "$remaining free message${if (remaining == 1) "" else "s"} left" else "Your free messages are used", modifier = Modifier.weight(1f), color = evaMuted(), fontSize = 13.sp)
+                    TextButton(onClick = { controller.premiumOpen = true }, enabled = !controller.sending) { Text("View Premium") }
+                }
+            }
             LazyColumn(
                 modifier = Modifier.weight(1f),
                 state = listState,

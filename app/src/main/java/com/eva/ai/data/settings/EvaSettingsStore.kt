@@ -50,6 +50,12 @@ class EvaSettingsStore @Inject constructor(
         prefs.edit().putString(billingStateKey(userId), state).apply()
     }
 
+    fun trialNoticeSeen(userId: String): Boolean = prefs.getBoolean(billingStateKey(userId) + "_trial_seen", false)
+
+    fun acknowledgeTrialNotice(userId: String) {
+        prefs.edit().putBoolean(billingStateKey(userId) + "_trial_seen", true).apply()
+    }
+
     private fun billingStateKey(userId: String): String = "billing_state_" +
         java.security.MessageDigest.getInstance("SHA-256").digest(userId.toByteArray(Charsets.UTF_8))
             .joinToString("") { "%02x".format(it.toInt() and 0xff) }

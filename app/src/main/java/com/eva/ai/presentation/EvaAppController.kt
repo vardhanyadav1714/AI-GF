@@ -104,9 +104,11 @@ class EvaAppController @Inject constructor(
 
     internal fun applyUsage(remaining: Int?) {
         freeMessagesRemaining = remaining
+        subscriptionState = subscriptionState?.let { state ->
+            state.copy(freeRemaining = remaining, freeUsed = remaining?.let { state.freeLimit - it } ?: state.freeUsed)
+        }
         if (remaining == 0 && subscriptionState?.active != true) {
-            notice = "Your free messages are finished. Premium is ready when you want to continue."
-            premiumOpen = true
+            notice = "That was your last free message. Your reply is ready; choose Premium to keep chatting."
         }
     }
 
@@ -134,7 +136,7 @@ class EvaAppController @Inject constructor(
 
     internal fun shouldOpenPaywallBeforeSend(): Boolean {
         val premium = subscriptionState?.active == true
-        if (premium || freeMessagesRemaining == null || freeMessagesRemaining!! > 0) return false
+        if (!freeTrialExhausted(premium, freeMessagesRemaining)) return false
         notice = "Your 10 free messages are over. Upgrade to Eva Premium for unlimited chats."
         premiumOpen = true
         activeTab = EvaTab.Chat

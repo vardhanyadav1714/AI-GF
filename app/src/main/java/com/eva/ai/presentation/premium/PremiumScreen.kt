@@ -83,6 +83,7 @@ fun PremiumScreen(
                     }
                 }
                 Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
+                    if (!active && subscription?.freeRemaining == 0) Text("You've used your ${subscription.freeLimit} free messages", color = evaMuted(), fontSize = 14.sp)
                     Text(subscription?.plan?.formattedAmount ?: "INR 499", fontSize = 36.sp, fontWeight = FontWeight.Bold)
                     Text("per month", fontSize = 14.sp, color = evaMuted())
                     Text(if (active) {

@@ -106,6 +106,9 @@ suspend fun EvaAppController.signOut() {
     messages.clear()
     conversations.clear()
     subscriptionState = null
+    freeMessagesRemaining = null
+    billingAdministrativeArea = null
+    razorpayBillingStateRequired = false
     selectedConversationId = null
     pendingConversationId = null
     activeTab = EvaTab.Home

@@ -129,6 +129,7 @@ suspend fun EvaAppController.sendMessage(quickText: String? = null) {
         )
     }.onFailure { error ->
         if (error is ApiException && error.statusCode == 402) {
+            if (draft.isBlank()) draft = cleanText
             handleMessageLimitReached(placeholderIndex - 1, placeholderIndex)
         } else {
             backendLive = false
