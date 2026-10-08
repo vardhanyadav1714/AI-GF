@@ -50,7 +50,7 @@ extensions.configure<ApplicationExtension>("android") {
                 signingConfig = signingConfigs.getByName("evaUpload")
             }
             optimization {
-                enable = false
+                enable = true
             }
         }
     }

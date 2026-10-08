@@ -1,0 +1,5 @@
+# Razorpay invokes merchant callbacks by their public names.
+-keepclassmembers class * implements com.razorpay.PaymentResultWithDataListener {
+    public void onPaymentSuccess(...);
+    public void onPaymentError(...);
+}

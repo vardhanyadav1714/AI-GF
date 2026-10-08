@@ -96,8 +96,6 @@ class MainActivity : ComponentActivity(), PaymentResultWithDataListener {
         razorpaySubscriptionId = savedInstanceState?.getString("razorpaySubscriptionId")
         razorpayAccountId = savedInstanceState?.getString("razorpayAccountId")
         enableEdgeToEdge()
-        window.statusBarColor = EvaColors.Black.toArgb()
-        window.navigationBarColor = EvaColors.Black.toArgb()
         WindowInsetsControllerCompat(window, window.decorView).apply {
             isAppearanceLightStatusBars = false
             isAppearanceLightNavigationBars = false

@@ -15,6 +15,7 @@ import android.util.Base64
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
+import androidx.activity.SystemBarStyle
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.animation.*
@@ -112,6 +113,7 @@ fun EvaApplication(
             ) { _ ->
                 Box(
                     modifier = Modifier.fillMaxSize()
+                        .windowInsetsPadding(WindowInsets.safeDrawing.only(WindowInsetsSides.Horizontal))
                 ) {
                     when (val auth = controller.authState) {
                         AuthState.Loading -> LoadingScreen()
@@ -146,19 +148,14 @@ fun EvaApplication(
 fun EvaSystemBars(lightMode: Boolean) {
     val view = LocalView.current
     val statusColor = if (lightMode) Color(0xFFFFF8FC) else EvaColors.Black
-    val navigationColor = if (lightMode) Color.White else EvaColors.Black
 
     DisposableEffect(lightMode, view) {
-        val window = (view.context as? Activity)?.window
+        val activity = view.context as? ComponentActivity
+        val window = activity?.window
         if (window != null) {
-            window.statusBarColor = statusColor.toArgb()
-            window.navigationBarColor = navigationColor.toArgb()
+            val bars = SystemBarStyle.auto(android.graphics.Color.TRANSPARENT, android.graphics.Color.TRANSPARENT) { !lightMode }
+            activity.enableEdgeToEdge(statusBarStyle = bars, navigationBarStyle = bars)
             window.decorView.setBackgroundColor(statusColor.toArgb())
-
-            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
-                window.isStatusBarContrastEnforced = false
-                window.isNavigationBarContrastEnforced = false
-            }
 
             WindowInsetsControllerCompat(window, view).apply {
                 isAppearanceLightStatusBars = lightMode

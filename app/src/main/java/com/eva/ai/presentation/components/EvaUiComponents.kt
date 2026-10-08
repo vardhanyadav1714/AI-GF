@@ -148,7 +148,7 @@ fun EvaPage(
                         drawRect(Brush.verticalGradient(listOf(baseTop, baseMid, baseBottom)))
                     }
             )
-            Box(Modifier.fillMaxSize()) {
+            Box(Modifier.align(Alignment.TopCenter).widthIn(max = 840.dp).fillMaxSize()) {
                 content()
             }
         }
