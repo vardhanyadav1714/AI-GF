@@ -31,7 +31,7 @@ class PlayBillingManager(
     private val accountId: () -> String? = { null }
 ) {
     private val mainHandler = Handler(Looper.getMainLooper())
-    private var checkoutAccountId: String? = null
+    private val checkoutOwner = BillingCheckoutOwner()
     private var checkoutInProgress = false
     private var useUserChoice = false
     private var closed = false
@@ -43,7 +43,7 @@ class PlayBillingManager(
 
     private val listener = PurchasesUpdatedListener { billingResult, purchases ->
         checkoutInProgress = false
-        checkoutAccountId = null
+        checkoutOwner.onPlayUpdate()
         if (billingResult.responseCode == BillingClient.BillingResponseCode.ITEM_ALREADY_OWNED) {
             restorePurchases()
             return@PurchasesUpdatedListener
@@ -79,10 +79,8 @@ class PlayBillingManager(
                 enableUserChoiceBilling { details ->
                     mainHandler.post {
                         if (closed) return@post
-                        val purchasingAccount = checkoutAccountId
-                        checkoutAccountId = null
                         checkoutInProgress = false
-                        if (purchasingAccount == null || purchasingAccount != accountId()) {
+                        if (!checkoutOwner.consumeAlternative(accountId())) {
                             onRestoreError("Your account changed. Start checkout again.")
                         } else if (details.products.none { it.id == PREMIUM_PRODUCT_ID } || details.externalTransactionToken.isBlank()) {
                             onRestoreError("Google Play did not return a valid Premium billing choice.")
@@ -197,9 +195,9 @@ class PlayBillingManager(
                     onError("Your account changed. Start checkout again.")
                     return@post
                 }
-                checkoutAccountId = userId
+                checkoutOwner.begin(userId, useUserChoice)
                 val launched = billingClient.launchBillingFlow(activity, flowParams)
-                if (launched.responseCode != BillingClient.BillingResponseCode.OK) { checkoutAccountId = null; checkoutInProgress = false }
+                if (launched.responseCode != BillingClient.BillingResponseCode.OK) { checkoutOwner.clear(); checkoutInProgress = false }
                 if (launched.responseCode == BillingClient.BillingResponseCode.ITEM_ALREADY_OWNED) restorePurchases()
                 else if (launched.responseCode != BillingClient.BillingResponseCode.OK) onError("Google Play checkout could not open. Please try again.")
             }
@@ -246,7 +244,7 @@ class PlayBillingManager(
 
     fun close() {
         closed = true
-        checkoutAccountId = null
+        checkoutOwner.clear()
         mainHandler.removeCallbacksAndMessages(null)
         standardClient.endConnection()
         if (userChoiceClientDelegate.isInitialized()) userChoiceClient.endConnection()
