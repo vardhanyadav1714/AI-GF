@@ -45,7 +45,11 @@ class EvaAppController @Inject constructor(
 
     // ── Billing state ──
     var subscriptionState by mutableStateOf<SubscriptionState?>(null)
-    var subscriptionBusy by mutableStateOf(false)
+    private val billingOperations = BillingOperationTracker()
+    val subscriptionBusy: Boolean get() = billingOperations.busy
+    fun billingBusy(operation: BillingOperation): Boolean = billingOperations.busy(operation)
+    internal fun beginBillingOperation(operation: BillingOperation): Long = billingOperations.begin(operation)
+    internal fun endBillingOperation(ticket: Long) { billingOperations.end(ticket) }
 
     /** null = unknown or unlimited (premium). */
     var freeMessagesRemaining by mutableStateOf<Int?>(null)

@@ -1,29 +1,11 @@
 package com.eva.ai.presentation.premium
 
-import android.Manifest
-import android.app.Activity
-import android.content.Context
-import android.content.Intent
-import android.content.pm.PackageManager
-import android.media.MediaPlayer
-import android.media.MediaRecorder
-import android.net.Uri
-import android.os.Build
-import android.os.Bundle
-import android.text.format.DateFormat
-import android.util.Base64
-import androidx.activity.ComponentActivity
-import androidx.activity.compose.setContent
-import androidx.activity.enableEdgeToEdge
-import androidx.activity.compose.rememberLauncherForActivityResult
-import androidx.activity.result.contract.ActivityResultContracts
-import androidx.compose.animation.*
-import androidx.compose.foundation.*
+import androidx.compose.foundation.Image
 import androidx.compose.foundation.layout.*
-import androidx.compose.foundation.lazy.*
-import androidx.compose.foundation.relocation.*
-import androidx.compose.foundation.shape.*
-import androidx.compose.foundation.text.*
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.rounded.*
 import androidx.compose.material3.*
@@ -31,252 +13,130 @@ import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
-import androidx.compose.ui.focus.onFocusEvent
-import androidx.compose.ui.graphics.Brush
-import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.graphics.toArgb
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
-import androidx.compose.ui.platform.LocalFocusManager
-import androidx.compose.ui.platform.LocalView
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.text.font.FontWeight
-import androidx.compose.ui.text.input.ImeAction
-import androidx.compose.ui.text.input.KeyboardType
-import androidx.compose.ui.text.style.TextAlign
-import androidx.compose.ui.text.style.TextOverflow
-import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
-import androidx.core.content.ContextCompat
-import androidx.core.view.WindowInsetsControllerCompat
-import com.eva.ai.R
 import com.eva.ai.BuildConfig
-import com.eva.ai.data.audio.*
-import com.eva.ai.data.remote.*
-import com.eva.ai.data.settings.*
-import com.eva.ai.domain.logic.*
-import com.eva.ai.domain.model.*
-import com.eva.ai.presentation.*
-import com.eva.ai.presentation.auth.*
-import com.eva.ai.presentation.chat.*
+import com.eva.ai.data.audio.openExternalUrl
+import com.eva.ai.R
+import com.eva.ai.domain.model.SubscriptionState
 import com.eva.ai.presentation.components.*
-import com.eva.ai.presentation.home.*
-import com.eva.ai.presentation.premium.*
-import com.eva.ai.presentation.settings.*
-import com.eva.ai.ui.theme.AICompanionTheme
-import kotlinx.coroutines.CoroutineScope
-import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.delay
-import kotlinx.coroutines.launch
-import kotlinx.coroutines.withContext
-import org.json.JSONArray
-import org.json.JSONObject
-import java.io.File
-import java.net.HttpURLConnection
-import java.net.URI
-import java.net.URLEncoder
-import java.util.Date
-import java.util.Locale
-import java.util.UUID
-import kotlin.math.max
 
 @Composable
 fun PremiumScreen(
-    subscription: SubscriptionState?,
-    busy: Boolean,
-    onBack: () -> Unit,
-    onContinue: () -> Unit,
-    onRefresh: () -> Unit,
-    onGooglePlay: (() -> Unit)? = null,
-    googlePlayBusy: Boolean = false,
-    onRestore: () -> Unit = {},
-    onCancel: () -> Unit = {}
+    subscription: SubscriptionState?, busy: Boolean,
+    checkoutBusy: Boolean, refreshBusy: Boolean, restoreBusy: Boolean,
+    verifyBusy: Boolean, cancelBusy: Boolean,
+    onBack: () -> Unit, onContinue: () -> Unit, onRefresh: () -> Unit,
+    onRestore: () -> Unit, onCancel: () -> Unit
 ) {
-    var confirmCancel by remember { mutableStateOf(false) }
-    if (confirmCancel) {
-        AlertDialog(onDismissRequest = { confirmCancel = false },
-            title = { Text("Cancel future renewals?") },
-            text = { Text("Your current paid period remains available until its end date.") },
-            confirmButton = { TextButton(onClick = { confirmCancel = false; onCancel() }) { Text("Cancel renewals") } },
-            dismissButton = { TextButton(onClick = { confirmCancel = false }) { Text("Keep membership") } })
-    }
-    val plan = subscription?.plan ?: SubscriptionPlan(
-        planId = "eva_premium_monthly",
-        name = "Eva Premium Monthly",
-        amount = 49900,
-        formattedAmount = "INR 499",
-        currency = "INR",
-        interval = "monthly"
-    )
+    val context = LocalContext.current
     val active = subscription?.active == true
-
-    EvaPage(backgroundImage = R.drawable.model_eva_real_v3) {
-        LazyColumn(
-            modifier = Modifier.fillMaxSize(),
-            contentPadding = PaddingValues(16.dp, 12.dp, 16.dp, 30.dp),
-            verticalArrangement = Arrangement.spacedBy(18.dp)
-        ) {
-            item {
-                Row(verticalAlignment = Alignment.CenterVertically) {
-                    IconGlassButton(icon = Icons.Rounded.ArrowBackIosNew, onClick = onBack)
-                    Column(
-                        modifier = Modifier.weight(1f),
-                        horizontalAlignment = Alignment.CenterHorizontally
-                    ) {
-                        Text("EVA Premium", fontSize = 22.sp, fontWeight = FontWeight.ExtraBold)
-                        Text("Unlock the full experience", color = evaMuted())
-                    }
-                    Spacer(Modifier.width(48.dp))
-                }
+    var confirmCancel by remember { mutableStateOf(false) }
+    fun openLink(url: String) = openExternalUrl(context, url) {
+        android.widget.Toast.makeText(context, "Could not open your browser.", android.widget.Toast.LENGTH_SHORT).show()
+    }
+    if (confirmCancel) AlertDialog(
+        onDismissRequest = { confirmCancel = false },
+        title = { Text("Cancel future renewals?") },
+        text = { Text("Access continues through your current paid period. No further renewals will be charged.") },
+        confirmButton = { TextButton(enabled = !busy, onClick = { confirmCancel = false; onCancel() }) { Text("Cancel renewals") } },
+        dismissButton = { TextButton(onClick = { confirmCancel = false }) { Text("Keep membership") } }
+    )
+    EvaPage {
+        Column(Modifier.fillMaxSize().statusBarsPadding().navigationBarsPadding()) {
+            Row(Modifier.fillMaxWidth().padding(horizontal = 12.dp, vertical = 8.dp), verticalAlignment = Alignment.CenterVertically) {
+                IconButton(onClick = onBack) { Icon(Icons.Rounded.ArrowBack, "Back") }
+                Text("Membership", fontSize = 17.sp, fontWeight = FontWeight.SemiBold)
             }
-            item {
-                Image(
-                    painter = painterResource(R.drawable.model_eva_real_v3),
-                    contentDescription = "Eva Premium",
-                    contentScale = ContentScale.Crop,
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .height(300.dp)
-                        .clip(RoundedCornerShape(26.dp))
-                )
-                GlassCard(
-                    modifier = Modifier
-                        .offset(y = (-22).dp)
-                        .fillMaxWidth()
-                ) {
-                    Column {
-                        PremiumFeature(Icons.Rounded.Chat, "Premium Membership", "One monthly membership for your account")
-                        PremiumFeature(Icons.Rounded.Psychology, "Shared Memory", "Eva remembers you across every companion")
-                        PremiumFeature(Icons.Rounded.GraphicEq, "Voice Notes", "Send voice and hear audio replies")
-                        PremiumFeature(Icons.Rounded.Star, "Custom Personality", "Make Eva your way")
-                        PremiumFeature(Icons.Rounded.Verified, "Google Play Billing", "Secure monthly subscription")
+            Column(Modifier.weight(1f).verticalScroll(rememberScrollState()).padding(horizontal = 24.dp), verticalArrangement = Arrangement.spacedBy(20.dp)) {
+                Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(16.dp)) {
+                    Image(painterResource(R.drawable.model_eva_real_v3), "Eva", contentScale = ContentScale.Crop, modifier = Modifier.size(64.dp).clip(CircleShape))
+                    Column(Modifier.weight(1f)) {
+                        Text("Eva Premium", fontSize = 28.sp, fontWeight = FontWeight.Bold, lineHeight = 32.sp)
+                        Text(if (active) "Your membership" else "A little more time together", color = evaMuted(), fontSize = 14.sp)
                     }
                 }
-            }
-            item {
-                // One honest plan summary instead of a single plan pretending
-                // to be a selectable list.
-                GlassCard(padding = PaddingValues(16.dp), radius = 20.dp) {
-                    Row(verticalAlignment = Alignment.CenterVertically) {
-                        Column(Modifier.weight(1f)) {
-                            Text(
-                                plan.name,
-                                color = evaText(),
-                                fontWeight = FontWeight.Bold,
-                                maxLines = 1,
-                                overflow = TextOverflow.Ellipsis
-                            )
-                            Spacer(Modifier.height(4.dp))
-                            Text(
-                                "${plan.formattedAmount} / month",
-                                color = evaText(),
-                                fontSize = 20.sp,
-                                fontWeight = FontWeight.ExtraBold
-                            )
-                            Spacer(Modifier.height(3.dp))
-                            Text(
-                                "Billed monthly · cancel anytime",
-                                color = evaMuted(),
-                                fontSize = 12.sp
-                            )
-                        }
-                        Box(
-                            modifier = Modifier
-                                .clip(RoundedCornerShape(999.dp))
-                                .background(
-                                    if (active) EvaColors.Green.copy(alpha = 0.16f)
-                                    else EvaColors.Gold.copy(alpha = 0.16f)
-                                )
-                                .padding(horizontal = 10.dp, vertical = 6.dp)
-                        ) {
-                            Text(
-                                if (active) "ACTIVE" else "READY",
-                                color = if (active) EvaColors.Green else EvaColors.Gold,
-                                fontSize = 11.sp,
-                                fontWeight = FontWeight.ExtraBold
-                            )
+                Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
+                    Text(subscription?.plan?.formattedAmount ?: "INR 499", fontSize = 36.sp, fontWeight = FontWeight.Bold)
+                    Text("per month", fontSize = 14.sp, color = evaMuted())
+                    Text(if (active) {
+                        if (subscription?.cancelAtPeriodEnd == true) "Active until your paid period ends" else "Membership active"
+                    } else "Auto-renews monthly. Cancel anytime.", color = if (active) EvaColors.Green else evaMuted(), fontSize = 13.sp)
+                }
+                HorizontalDivider(color = evaMuted().copy(alpha = 0.18f))
+                Column(verticalArrangement = Arrangement.spacedBy(18.dp)) {
+                    Benefit(Icons.Rounded.ChatBubbleOutline, "Every companion", "One membership across your Eva account")
+                    Benefit(Icons.Rounded.Psychology, "Shared memory", "Continue your story across companions")
+                    Benefit(Icons.Rounded.GraphicEq, "Voice conversations", "Voice notes and audio replies")
+                }
+                HorizontalDivider(color = evaMuted().copy(alpha = 0.18f))
+                if (active) {
+                    Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                        subscription?.currentEnd?.let { Text("Paid through ${it.substringBefore('T')}", fontSize = 14.sp) }
+                        Text(when (subscription?.provider) { "google_play" -> "Billed through Google Play"; "razorpay" -> "Billed through Razorpay"; else -> "Membership confirmed" }, color = evaMuted(), fontSize = 13.sp)
+                        if (subscription?.provider == "google_play") {
+                            OutlinedButton(enabled = !busy, onClick = { openLink("https://play.google.com/store/account/subscriptions?sku=eva_premium_monthly&package=com.eva.ai") }, modifier = Modifier.fillMaxWidth().heightIn(min = 52.dp), shape = RoundedCornerShape(8.dp)) {
+                                Icon(Icons.Rounded.Settings, null, Modifier.size(18.dp)); Spacer(Modifier.width(8.dp)); Text("Manage membership")
+                            }
+                        } else if (subscription?.provider == "razorpay" && subscription.cancelAtPeriodEnd != true) {
+                            TextButton(enabled = !busy, onClick = { confirmCancel = true }, modifier = Modifier.fillMaxWidth().heightIn(min = 48.dp)) {
+                                BusyIcon(cancelBusy, Icons.Rounded.EventBusy)
+                                Spacer(Modifier.width(8.dp)); Text(if (cancelBusy) "Cancelling renewals..." else "Cancel future renewals")
+                            }
                         }
                     }
-                }
-            }
-            item {
-                GradientButton(
-                    icon = Icons.Rounded.LockOpen,
-                    label = when {
-                        active -> "Premium Active"
-                        busy -> "Opening Checkout"
-                        BuildConfig.ALTERNATIVE_BILLING_ENABLED -> "Choose payment method"
-                        else -> "Continue with Google Play"
-                    },
-                    enabled = !busy && !active,
-                    onClick = onGooglePlay ?: onContinue
-                )
-            }
-            item {
-                val context = LocalContext.current
-                Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                    Text(
-                        "Renews monthly until cancelled. Cancel before the next renewal to stop the next charge. If renewal has already been charged, cancellation stops later renewals. Access continues through the paid period. No discretionary refunds; legal and provider exceptions apply.",
-                        color = evaMuted(), fontSize = 12.sp, lineHeight = 18.sp,
-                        textAlign = TextAlign.Center, modifier = Modifier.fillMaxWidth()
-                    )
-                    TextButton(onClick = {
-                        openExternalUrl(context, "https://merigf.com/refund-policy") {
-                            android.widget.Toast.makeText(context, "Visit merigf.com/refund-policy", android.widget.Toast.LENGTH_LONG).show()
-                        }
-                    }) { Text("Cancellation & Refund Policy", color = EvaColors.Pink) }
-                }
-            }
-            item {
-                onGooglePlay?.let {
-                    GradientButton(
-                        icon = Icons.Rounded.PlayCircle,
-                        label = when {
-                            googlePlayBusy -> "Checking purchases"
-                            else -> "Restore purchases"
-                        },
-                        enabled = !googlePlayBusy,
-                        onClick = onRestore
-                    )
-                }
-            }
-            item {
-                val context = LocalContext.current
-                subscription?.currentEnd?.let { end ->
-                    Text("Current period ends ${end.substringBefore('T')}", color = evaMuted(), modifier = Modifier.fillMaxWidth())
-                }
-                if (subscription?.cancelAtPeriodEnd == true) {
-                    Text("Future renewals are cancelled", color = evaMuted())
-                } else if (subscription?.provider == "razorpay" && active) {
-                    TextButton(onClick = { confirmCancel = true }, enabled = !busy, modifier = Modifier.fillMaxWidth()) {
-                        Icon(Icons.Rounded.Cancel, contentDescription = null)
-                        Spacer(Modifier.width(8.dp))
-                        Text("Cancel future renewals")
+                } else {
+                    val confirmingPayment = verifyBusy && !restoreBusy
+                    Button(onClick = onContinue, enabled = !busy, shape = RoundedCornerShape(8.dp), colors = ButtonDefaults.buttonColors(containerColor = EvaColors.Pink), modifier = Modifier.fillMaxWidth().heightIn(min = 56.dp)) {
+                        BusyIcon(checkoutBusy || confirmingPayment, Icons.Rounded.LockOpen)
+                        Spacer(Modifier.width(10.dp))
+                        Text(when {
+                            checkoutBusy -> "Opening checkout..."
+                            confirmingPayment -> "Confirming payment..."
+                            BuildConfig.ALTERNATIVE_BILLING_ENABLED -> "Choose payment method"
+                            else -> "Subscribe with Google Play"
+                        }, fontWeight = FontWeight.SemiBold, maxLines = 2)
                     }
                 }
-                if (subscription?.provider == "google_play") {
-                    TextButton(onClick = {
-                        runCatching { context.startActivity(Intent(Intent.ACTION_VIEW,
-                            Uri.parse("https://play.google.com/store/account/subscriptions?sku=eva_premium_monthly&package=com.eva.ai"))) }
-                    }, modifier = Modifier.fillMaxWidth()) {
-                        Icon(Icons.Rounded.Settings, contentDescription = null)
-                        Spacer(Modifier.width(8.dp))
-                        Text("Manage in Google Play")
-                    }
+                OutlinedButton(onClick = onRestore, enabled = !busy, shape = RoundedCornerShape(8.dp), modifier = Modifier.fillMaxWidth().heightIn(min = 48.dp)) {
+                    BusyIcon(restoreBusy, Icons.Rounded.Restore); Spacer(Modifier.width(8.dp))
+                    Text(if (restoreBusy) "Restoring purchases..." else "Restore purchases")
                 }
-                Text(
-                    if (busy) "Checking subscription..." else "Refresh Subscription Status",
-                    color = EvaColors.Pink.copy(alpha = 0.9f),
-                    fontWeight = FontWeight.ExtraBold,
-                    textAlign = TextAlign.Center,
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .clickable(enabled = !busy, onClick = onRefresh)
-                )
+                TextButton(onClick = onRefresh, enabled = !busy, modifier = Modifier.fillMaxWidth().heightIn(min = 48.dp)) {
+                    BusyIcon(refreshBusy, Icons.Rounded.Refresh); Spacer(Modifier.width(8.dp))
+                    Text(if (refreshBusy) "Refreshing status..." else "Refresh payment status")
+                }
+                Text("Cancellation stops future renewals. Access continues through your paid period. No discretionary refunds; legal and provider exceptions apply.", color = evaMuted(), fontSize = 12.sp, lineHeight = 18.sp)
+                FlowRow(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceEvenly) {
+                    TextButton(onClick = { openLink("https://merigf.com/terms") }) { Text("Terms", fontSize = 12.sp) }
+                    TextButton(onClick = { openLink("https://merigf.com/refund-policy") }) { Text("Cancellation & refunds", fontSize = 12.sp) }
+                }
+                Spacer(Modifier.height(12.dp))
             }
         }
     }
 }
 
+@Composable
+private fun BusyIcon(busy: Boolean, icon: ImageVector) {
+    Box(Modifier.size(20.dp), contentAlignment = Alignment.Center) {
+        if (busy) CircularProgressIndicator(Modifier.size(18.dp), strokeWidth = 2.dp)
+        else Icon(icon, null, Modifier.size(20.dp))
+    }
+}
+
+@Composable
+private fun Benefit(icon: ImageVector, title: String, detail: String) {
+    Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(14.dp)) {
+        Icon(icon, null, Modifier.size(24.dp), tint = EvaColors.Pink)
+        Column(Modifier.weight(1f)) {
+            Text(title, fontWeight = FontWeight.SemiBold, fontSize = 15.sp)
+            Text(detail, color = evaMuted(), fontSize = 13.sp, lineHeight = 18.sp)
+        }
+    }
+}

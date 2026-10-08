@@ -32,6 +32,8 @@ import com.eva.ai.presentation.openConversationFromNotification
 import com.eva.ai.presentation.refreshSubscription
 import com.eva.ai.presentation.signInWithGoogle
 import com.eva.ai.presentation.googleSignInUri
+import com.eva.ai.presentation.BillingOperation
+import com.eva.ai.presentation.withBillingOperation
 import com.eva.ai.presentation.startPremiumSubscription
 import com.eva.ai.presentation.userChoiceBillingEnabled
 import com.eva.ai.presentation.syncDeviceToken
@@ -48,6 +50,10 @@ import dagger.hilt.android.AndroidEntryPoint
 import javax.inject.Inject
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.CancellationException
+import kotlinx.coroutines.suspendCancellableCoroutine
+import kotlinx.coroutines.withTimeout
+import kotlin.coroutines.resume
+import kotlin.coroutines.resumeWithException
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
 import com.eva.ai.domain.model.AuthState
@@ -125,17 +131,45 @@ class MainActivity : ComponentActivity(), PaymentResultWithDataListener {
                 onGooglePlaySubscribe = {
                     controller.notice = null
                     if (!controller.subscriptionBusy) lifecycleScope.launch {
-                        controller.subscriptionBusy = true
-                        val enabled = controller.userChoiceBillingEnabled()
-                        controller.subscriptionBusy = false
+                        val enabled = controller.withBillingOperation(BillingOperation.Checkout) {
+                            controller.userChoiceBillingEnabled()
+                        }
                         playBilling.launchSubscribe(this@MainActivity, enabled) { message ->
                             controller.notice = message
                         }
                     }
                 },
                 onRestorePurchases = {
-                    playBilling.restorePurchases()
-                    lifecycleScope.launch { controller.refreshSubscription() }
+                    if (!controller.subscriptionBusy) lifecycleScope.launch {
+                        controller.withBillingOperation(BillingOperation.Restore) {
+                            try {
+                                val purchases = withTimeout(20_000) {
+                                    suspendCancellableCoroutine<List<com.android.billingclient.api.Purchase>> { continuation ->
+                                        playBilling.queryOwnedPurchases { purchases, error ->
+                                            if (continuation.isActive) {
+                                                if (error != null) continuation.resumeWithException(IllegalStateException(error))
+                                                else continuation.resume(purchases)
+                                            }
+                                        }
+                                    }
+                                }
+                                purchaseVerificationMutex.withLock {
+                                    purchases.forEach { purchase ->
+                                        if (controller.verifyGooglePlayPurchase(purchase.purchaseToken, PlayBillingManager.PREMIUM_PRODUCT_ID)) {
+                                            playBilling.acknowledge(purchase.purchaseToken)
+                                        }
+                                    }
+                                }
+                                val refreshed = controller.refreshSubscription(silent = true)
+                                if (refreshed) controller.notice = if (controller.subscriptionState?.active == true)
+                                    "Your membership is restored." else "No active membership was found."
+                                else controller.notice = "Could not refresh your membership. Please try again."
+                            } catch (error: Exception) {
+                                if (error is CancellationException && error !is kotlinx.coroutines.TimeoutCancellationException) throw error
+                                controller.notice = "Could not restore purchases. Please try again."
+                            }
+                        }
+                    }
                 }
             )
         }

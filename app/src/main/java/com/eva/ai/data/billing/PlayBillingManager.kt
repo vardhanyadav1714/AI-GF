@@ -242,6 +242,22 @@ class PlayBillingManager(
         }
     }
 
+    fun queryOwnedPurchases(onResult: (List<Purchase>, String?) -> Unit) {
+        if (closed || !billingClient.isReady) {
+            onResult(emptyList(), "Google Play is connecting. Try again in a moment.")
+            return
+        }
+        billingClient.queryPurchasesAsync(
+            QueryPurchasesParams.newBuilder().setProductType(BillingClient.ProductType.SUBS).build()
+        ) { result, purchases ->
+            if (result.responseCode != BillingClient.BillingResponseCode.OK) {
+                onResult(emptyList(), "Could not check existing Google Play purchases.")
+            } else onResult(purchases.filter {
+                it.purchaseState == Purchase.PurchaseState.PURCHASED && PREMIUM_PRODUCT_ID in it.products
+            }, null)
+        }
+    }
+
     fun close() {
         closed = true
         checkoutOwner.clear()

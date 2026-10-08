@@ -213,17 +213,16 @@ fun EvaShell(
                 controller.premiumOpen -> PremiumScreen(
                     subscription = controller.subscriptionState,
                     busy = controller.subscriptionBusy,
-                    googlePlayBusy = controller.subscriptionBusy,
+                    checkoutBusy = controller.billingBusy(BillingOperation.Checkout),
+                    refreshBusy = controller.billingBusy(BillingOperation.Refresh),
+                    restoreBusy = controller.billingBusy(BillingOperation.Restore),
+                    verifyBusy = controller.billingBusy(BillingOperation.Verify),
+                    cancelBusy = controller.billingBusy(BillingOperation.Cancel),
                     onBack = { controller.premiumOpen = false },
-                    onContinue = {
-                        scope.launch {
-                            controller.notice = "Use Google Play's payment selection to start your subscription."
-                        }
-                    },
+                    onContinue = onGooglePlaySubscribe,
                     onRefresh = {
                         scope.launch { controller.refreshSubscription() }
                     },
-                    onGooglePlay = onGooglePlaySubscribe,
                     onRestore = onRestorePurchases,
                     onCancel = { scope.launch { controller.cancelPremiumRenewal() } }
                 )
