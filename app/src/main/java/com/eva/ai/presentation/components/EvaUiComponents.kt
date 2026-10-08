@@ -38,6 +38,7 @@ import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.navigationBarsPadding
@@ -56,6 +57,17 @@ import androidx.compose.material.icons.rounded.Home
 import androidx.compose.material.icons.rounded.PersonOutline
 import androidx.compose.material.icons.rounded.WorkspacePremium
 import androidx.compose.material3.Icon
+import androidx.compose.material3.Button
+import androidx.compose.material3.ButtonDefaults
+import androidx.compose.material3.IconButton
+import androidx.compose.material3.IconButtonDefaults
+import androidx.compose.material3.CircularProgressIndicator
+import androidx.compose.material3.ExperimentalMaterial3Api
+import androidx.compose.material3.TooltipBox
+import androidx.compose.material3.TooltipDefaults
+import androidx.compose.material3.TooltipAnchorPosition
+import androidx.compose.material3.PlainTooltip
+import androidx.compose.material3.rememberTooltipState
 import androidx.compose.material3.LocalContentColor
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Surface
@@ -108,6 +120,7 @@ object EvaColors {
     val Gold = com.eva.ai.ui.theme.EvaGold
     val Green = com.eva.ai.ui.theme.EvaGreen
     val Danger = com.eva.ai.ui.theme.EvaDanger
+    val Action = Color(0xFFB72C50)
     val Ink = EvaInk
     val InkHigh = EvaInkHigh
     val Gradient = Brush.linearGradient(listOf(Purple, Pink, Coral))
@@ -182,83 +195,52 @@ fun GlassCard(
 }
 
 @Composable
+@OptIn(ExperimentalMaterial3Api::class)
 fun IconGlassButton(
     icon: ImageVector,
+    description: String,
     onClick: () -> Unit,
     modifier: Modifier = Modifier,
     color: Color = evaText(),
     size: Dp = 48.dp
 ) {
-    val interactionSource = rememberEvaInteractionSource()
-    GlassCard(
-        modifier = modifier
-            .size(size)
-            .pressScale(interactionSource = interactionSource, pressedScale = 0.92f)
-            .clickable(interactionSource = interactionSource, indication = null, onClick = onClick),
-        padding = PaddingValues(0.dp),
-        radius = size / 2
+    TooltipBox(
+        positionProvider = TooltipDefaults.rememberTooltipPositionProvider(TooltipAnchorPosition.Above),
+        tooltip = { PlainTooltip { Text(description) } }, state = rememberTooltipState()
     ) {
-        Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
-            Icon(icon, contentDescription = null, tint = color, modifier = Modifier.size(size * 0.5f))
+        IconButton(onClick = onClick, modifier = modifier.size(size.coerceAtLeast(48.dp))
+            .clip(RoundedCornerShape(8.dp)).background(evaGlass())
+            .border(1.dp, evaBorder(), RoundedCornerShape(8.dp)),
+            colors = IconButtonDefaults.iconButtonColors(contentColor = color)) {
+            Icon(icon, contentDescription = description, modifier = Modifier.size(22.dp))
         }
     }
 }
 
 @Composable
-fun GradientButton(
+fun PrimaryButton(
     icon: ImageVector,
     label: String,
     enabled: Boolean = true,
+    busy: Boolean = false,
     onClick: () -> Unit
 ) {
-    val interactionSource = rememberEvaInteractionSource()
     val hapticTick = rememberEvaHaptic()
-    val disabledFill = if (isEvaLight()) {
-        Color.Black.copy(alpha = 0.06f)
-    } else {
-        Color.White.copy(alpha = 0.08f)
-    }
-    Surface(
-        modifier = Modifier
-            .fillMaxWidth()
-            .height(58.dp)
-            .pressScale(interactionSource = interactionSource, pressedScale = 0.98f)
-            .clip(RoundedCornerShape(30.dp))
-            .clickable(interactionSource = interactionSource, indication = null, enabled = enabled) {
-                hapticTick()
-                onClick()
-            },
-        color = Color.Transparent,
-        shape = RoundedCornerShape(30.dp),
-        shadowElevation = if (enabled) 6.dp else 0.dp
+    Button(
+        onClick = { hapticTick(); onClick() }, enabled = enabled && !busy,
+        modifier = Modifier.fillMaxWidth().heightIn(min = 56.dp),
+        shape = RoundedCornerShape(8.dp),
+        colors = ButtonDefaults.buttonColors(containerColor = EvaColors.Action, contentColor = Color.White,
+            disabledContainerColor = if (busy) EvaColors.Action else evaGlass(),
+            disabledContentColor = if (busy) Color.White else evaMuted()),
+        contentPadding = PaddingValues(horizontal = 20.dp, vertical = 14.dp)
     ) {
-        Row(
-            modifier = Modifier
-                .fillMaxSize()
-                .background(
-                    if (enabled) {
-                        evaAnimatedGradient()
-                    } else {
-                        Brush.linearGradient(listOf(disabledFill, disabledFill))
-                    }
-                ),
-            horizontalArrangement = Arrangement.Center,
-            verticalAlignment = Alignment.CenterVertically
-        ) {
-            Icon(
-                icon,
-                contentDescription = null,
-                tint = if (enabled) Color.White else evaMuted(),
-                modifier = Modifier.size(21.dp)
-            )
-            Spacer(Modifier.width(10.dp))
-            Text(
-                label,
-                color = if (enabled) Color.White else evaMuted(),
-                fontSize = 17.sp,
-                fontWeight = FontWeight.ExtraBold
-            )
+        Box(Modifier.size(20.dp), contentAlignment = Alignment.Center) {
+            if (busy) CircularProgressIndicator(Modifier.size(18.dp), color = LocalContentColor.current, strokeWidth = 2.dp)
+            else Icon(icon, contentDescription = null, modifier = Modifier.size(20.dp))
         }
+        Spacer(Modifier.width(10.dp))
+        Text(label, fontSize = 15.sp, fontWeight = FontWeight.SemiBold, textAlign = TextAlign.Center)
     }
 }
 
@@ -498,27 +480,6 @@ fun Modifier.pressScale(
 /** A fresh InteractionSource per component; standard companion to pressScale. */
 @Composable
 fun rememberEvaInteractionSource(): MutableInteractionSource = remember { MutableInteractionSource() }
-
-/** Slowly drifting brand gradient: the "liquid" accent for primary CTAs. */
-@Composable
-fun evaAnimatedGradient(): Brush {
-    val transition = rememberInfiniteTransition(label = "eva-brand-gradient")
-    val shift by transition.animateFloat(
-        initialValue = 0f,
-        targetValue = 1f,
-        animationSpec = infiniteRepeatable(
-            animation = tween(durationMillis = 2800, easing = LinearEasing),
-            repeatMode = RepeatMode.Restart
-        ),
-        label = "eva-brand-shift"
-    )
-    val span = 520f
-    return Brush.linearGradient(
-        colors = listOf(EvaColors.Purple, EvaColors.Pink, EvaColors.Coral, EvaColors.Purple),
-        start = Offset(-span + (span * 2f) * shift, 40f),
-        end = Offset(span * shift, 620f)
-    )
-}
 
 /** Moving sheen for skeleton loaders. Draw a base fill first, then the sheen. */
 @Composable

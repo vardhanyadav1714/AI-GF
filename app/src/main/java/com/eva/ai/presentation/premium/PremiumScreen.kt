@@ -142,7 +142,7 @@ fun PremiumScreen(
                         }
                     }
                     val stateMissing = billingStateRequired && billingState == null
-                    Button(onClick = onContinue, enabled = !busy && !stateMissing, shape = RoundedCornerShape(8.dp), colors = ButtonDefaults.buttonColors(containerColor = EvaColors.Pink, contentColor = Color.White, disabledContainerColor = if (stateMissing) EvaColors.Pink.copy(alpha = 0.35f) else EvaColors.Pink, disabledContentColor = Color.White), modifier = Modifier.fillMaxWidth().heightIn(min = 56.dp)) {
+                    Button(onClick = onContinue, enabled = !busy && !stateMissing, shape = RoundedCornerShape(8.dp), colors = ButtonDefaults.buttonColors(containerColor = EvaColors.Action, contentColor = Color.White, disabledContainerColor = if (stateMissing) EvaColors.Action.copy(alpha = 0.35f) else EvaColors.Action, disabledContentColor = Color.White), modifier = Modifier.fillMaxWidth().heightIn(min = 56.dp)) {
                         BusyIcon(checkoutBusy, Icons.Rounded.LockOpen)
                         Spacer(Modifier.width(10.dp))
                         Text(checkoutLabel, fontWeight = FontWeight.SemiBold, maxLines = 2)

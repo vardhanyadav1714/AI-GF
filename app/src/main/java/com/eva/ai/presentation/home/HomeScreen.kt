@@ -115,6 +115,7 @@ fun HomeScreen(
                     Spacer(Modifier.weight(1f))
                     IconGlassButton(
                         icon = Icons.Rounded.WorkspacePremium,
+                        description = "Eva Premium",
                         color = EvaColors.Gold,
                         onClick = onPremium,
                         size = 44.dp
@@ -347,7 +348,7 @@ fun HeroImageCard(companion: CompanionProfile, onChat: () -> Unit) {
                 fontWeight = FontWeight.Bold
             )
             Spacer(Modifier.height(14.dp))
-            GradientButton(
+            PrimaryButton(
                 icon = Icons.Rounded.ChatBubble,
                 label = "Start Chatting",
                 onClick = onChat

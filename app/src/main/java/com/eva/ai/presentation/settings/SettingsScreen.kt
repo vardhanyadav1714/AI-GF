@@ -208,6 +208,7 @@ fun ProfileScreen(controller: EvaAppController, user: EvaUser, scope: CoroutineS
                     Spacer(Modifier.weight(1f))
                     IconGlassButton(
                         icon = if (controller.lightMode == true) Icons.Rounded.LightMode else Icons.Rounded.DarkMode,
+                        description = if (controller.lightMode == true) "Use dark mode" else "Use light mode",
                         onClick = { controller.applyLightMode(!(controller.lightMode == true)) }
                     )
                 }

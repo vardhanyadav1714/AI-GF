@@ -118,6 +118,7 @@ fun AuthScreen(
     var email by remember { mutableStateOf("") }
     var code by remember { mutableStateOf("") }
     var codeSent by remember { mutableStateOf(false) }
+    var selectedAction by remember { mutableStateOf<AuthAction?>(null) }
     val cleanEmail = email.trim()
     val canRequestCode = cleanEmail.contains("@") &&
         cleanEmail.length >= 5 &&
@@ -199,9 +200,10 @@ fun AuthScreen(
                         )
 
                         GoogleAuthButton(
-                            label = if (busy) "Signing in..." else "Continue with Google",
+                            label = "Continue with Google",
                             enabled = !busy,
-                            onClick = onGoogleSignIn
+                            busy = authActionBusy(busy, selectedAction, AuthAction.Google),
+                            onClick = { selectedAction = AuthAction.Google; onGoogleSignIn() }
                         )
 
                         AuthDivider()
@@ -215,13 +217,16 @@ fun AuthScreen(
                                     email = cleanEmail,
                                     code = code,
                                     busy = busy,
+                                    showProgress = authActionBusy(busy, selectedAction, AuthAction.VerifyCode),
+                                    resendBusy = authActionBusy(busy, selectedAction, AuthAction.ResendCode),
                                     onCodeChange = { code = it.take(6) },
-                                    onVerify = { onVerify(cleanEmail, code) },
+                                    onVerify = { selectedAction = AuthAction.VerifyCode; onVerify(cleanEmail, code) },
                                     onBack = {
                                         codeSent = false
                                         code = ""
                                     },
                                     onResend = {
+                                        selectedAction = AuthAction.ResendCode
                                         onRequestCode(name, cleanEmail) {
                                             codeSent = true
                                         }
@@ -233,10 +238,12 @@ fun AuthScreen(
                                     name = name,
                                     email = email,
                                     busy = busy,
+                                    showProgress = authActionBusy(busy, selectedAction, AuthAction.SendCode),
                                     canRequestCode = canRequestCode,
                                     onNameChange = { name = it },
                                     onEmailChange = { email = it },
                                     onSubmit = {
+                                        selectedAction = AuthAction.SendCode
                                         onRequestCode(name, cleanEmail) {
                                             codeSent = true
                                         }
@@ -304,7 +311,7 @@ fun AuthModeToggle(
                     .fillMaxSize()
                     .clip(RoundedCornerShape(22.dp))
                     .then(
-                        if (selected) Modifier.background(EvaColors.Gradient)
+                        if (selected) Modifier.background(EvaColors.Action)
                         else Modifier.background(Color.Transparent)
                     )
                     .clickable(enabled = enabled) { onModeChange(item) },
@@ -325,40 +332,32 @@ fun AuthModeToggle(
 fun GoogleAuthButton(
     label: String,
     enabled: Boolean,
+    busy: Boolean = false,
     onClick: () -> Unit
 ) {
-    Surface(
-        modifier = Modifier
-            .fillMaxWidth()
-            .height(56.dp)
-            .clip(RoundedCornerShape(28.dp))
-            .clickable(enabled = enabled, onClick = onClick),
-        shape = RoundedCornerShape(28.dp),
-        color = if (isEvaLight()) Color.White else Color.White.copy(alpha = 0.10f),
+    OutlinedButton(
+        onClick = onClick, enabled = enabled && !busy,
+        modifier = Modifier.fillMaxWidth().heightIn(min = 56.dp),
+        shape = RoundedCornerShape(8.dp),
+        colors = ButtonDefaults.outlinedButtonColors(contentColor = evaText(), disabledContentColor = evaMuted()),
         border = BorderStroke(1.dp, if (isEvaLight()) Color.Black.copy(alpha = 0.10f) else Color.White.copy(alpha = 0.12f))
     ) {
-        Row(
-            modifier = Modifier
-                .fillMaxSize()
-                .padding(horizontal = 16.dp),
-            verticalAlignment = Alignment.CenterVertically,
-            horizontalArrangement = Arrangement.Center
-        ) {
-            Image(
+        Box(Modifier.size(22.dp), contentAlignment = Alignment.Center) {
+            if (busy) CircularProgressIndicator(Modifier.size(18.dp), color = evaText(), strokeWidth = 2.dp)
+            else Image(
                 painter = painterResource(R.drawable.ic_google_g),
                 contentDescription = null,
                 modifier = Modifier.size(22.dp)
             )
+        }
             Spacer(Modifier.width(10.dp))
             Text(
                 text = label,
                 color = evaText(),
-                fontWeight = FontWeight.Bold,
+                fontWeight = FontWeight.SemiBold,
                 fontSize = 15.sp,
-                maxLines = 1,
-                overflow = TextOverflow.Ellipsis
+                textAlign = TextAlign.Center
             )
-        }
     }
 }
 
@@ -392,6 +391,7 @@ fun EmailEntryPanel(
     name: String,
     email: String,
     busy: Boolean,
+    showProgress: Boolean = busy,
     canRequestCode: Boolean,
     onNameChange: (String) -> Unit,
     onEmailChange: (String) -> Unit,
@@ -422,14 +422,14 @@ fun EmailEntryPanel(
                 if (canRequestCode && !busy) onSubmit()
             }
         )
-        GradientButton(
+        PrimaryButton(
             icon = Icons.Rounded.Send,
             label = when {
-                busy -> "Sending code..."
                 mode == AuthMode.Login -> "Send login code"
                 else -> "Create account"
             },
             enabled = !busy && canRequestCode,
+            busy = showProgress,
             onClick = onSubmit
         )
     }
@@ -440,6 +440,8 @@ fun CodeVerificationPanel(
     email: String,
     code: String,
     busy: Boolean,
+    showProgress: Boolean = busy,
+    resendBusy: Boolean = false,
     onCodeChange: (String) -> Unit,
     onVerify: () -> Unit,
     onBack: () -> Unit,
@@ -471,10 +473,11 @@ fun CodeVerificationPanel(
                 if (code.length >= 6 && !busy) onVerify()
             }
         )
-        GradientButton(
+        PrimaryButton(
             icon = Icons.Rounded.CheckCircle,
-            label = if (busy) "Verifying..." else "Verify code",
+            label = "Verify code",
             enabled = !busy && code.length >= 6,
+            busy = showProgress,
             onClick = onVerify
         )
         Row(
@@ -486,6 +489,11 @@ fun CodeVerificationPanel(
                 Text("Change email", color = EvaColors.Pink, fontWeight = FontWeight.Bold)
             }
             TextButton(onClick = onResend, enabled = !busy) {
+                Box(Modifier.size(18.dp), contentAlignment = Alignment.Center) {
+                    if (resendBusy) CircularProgressIndicator(Modifier.size(16.dp), color = EvaColors.Action, strokeWidth = 2.dp)
+                    else Icon(Icons.Rounded.Refresh, null, Modifier.size(18.dp))
+                }
+                Spacer(Modifier.width(6.dp))
                 Text("Resend", color = EvaColors.Pink, fontWeight = FontWeight.Bold)
             }
         }

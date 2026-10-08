@@ -367,6 +367,7 @@ fun ChatHeader(
     ) {
         IconGlassButton(
             icon = Icons.Rounded.ArrowBackIosNew,
+            description = "Back to chats",
             onClick = onBack,
             size = 42.dp
         )
@@ -394,6 +395,7 @@ fun ChatHeader(
         Box {
             IconGlassButton(
                 icon = Icons.Rounded.MoreVert,
+                description = "Chat options",
                 onClick = { menuOpen = true },
                 size = 42.dp
             )
@@ -766,7 +768,7 @@ fun ChatComposer(
                             Text("Message...", color = evaMuted().copy(alpha = 0.62f))
                         },
                         keyboardOptions = KeyboardOptions(imeAction = ImeAction.Send),
-                        keyboardActions = KeyboardActions(onSend = { onSend() }),
+                        keyboardActions = KeyboardActions(onSend = { if (!sending && draft.trim().isNotEmpty()) onSend() }),
                         colors = TextFieldDefaults.colors(
                             focusedContainerColor = Color.Transparent,
                             unfocusedContainerColor = Color.Transparent,
@@ -775,47 +777,22 @@ fun ChatComposer(
                             unfocusedIndicatorColor = Color.Transparent
                         )
                     )
-                    val sendInteraction = rememberEvaInteractionSource()
-                    Box(
-                        modifier = Modifier
-                            .size(50.dp)
-                            .pressScale(interactionSource = sendInteraction, pressedScale = 0.88f)
-                            .clip(CircleShape)
-                            .background(EvaColors.Gradient)
-                            .clickable(
-                                interactionSource = sendInteraction,
-                                indication = null,
-                                enabled = !sending
-                            ) {
+                    FilledIconButton(
+                        modifier = Modifier.size(50.dp), enabled = !sending,
+                        colors = IconButtonDefaults.filledIconButtonColors(containerColor = EvaColors.Action, contentColor = Color.White,
+                            disabledContainerColor = EvaColors.Action, disabledContentColor = Color.White),
+                        onClick = {
                                 if (draft.trim().isNotEmpty()) {
                                     hapticTick()
                                     onSend()
                                 } else {
                                     onVoiceRecord()
                                 }
-                            },
-                        contentAlignment = Alignment.Center
+                            }
                     ) {
-                        AnimatedContent(
-                            targetState = sending || draft.trim().isNotEmpty(),
-                            transitionSpec = {
-                                (scaleIn(
-                                    initialScale = 0.6f,
-                                    animationSpec = spring(stiffness = Spring.StiffnessMedium)
-                                ) + fadeIn()) togetherWith
-                                    (scaleOut(
-                                        targetScale = 0.6f,
-                                        animationSpec = spring(stiffness = Spring.StiffnessMedium)
-                                    ) + fadeOut())
-                            },
-                            label = "composer-action"
-                        ) { showSend ->
-                            Icon(
-                                if (showSend) Icons.Rounded.Send else Icons.Rounded.Mic,
-                                contentDescription = null,
-                                tint = Color.White
-                            )
-                        }
+                        if (sending) CircularProgressIndicator(Modifier.size(20.dp), color = Color.White, strokeWidth = 2.dp)
+                        else Icon(if (draft.trim().isNotEmpty()) Icons.Rounded.Send else Icons.Rounded.Mic,
+                            contentDescription = if (draft.trim().isNotEmpty()) "Send message" else "Record voice message")
                     }
                 }
             }
@@ -855,19 +832,14 @@ fun RecordingComposer(seconds: Int, onStop: () -> Unit) {
             Spacer(Modifier.height(4.dp))
             AnimatedWaveform(color = EvaColors.Danger.copy(alpha = 0.82f), height = 20.dp)
         }
-        Box(
-            modifier = Modifier
-                .height(42.dp)
-                .width(92.dp)
-                .clip(RoundedCornerShape(24.dp))
-                .background(Brush.linearGradient(listOf(EvaColors.Danger, EvaColors.Coral)))
-                .clickable(onClick = onStop),
-            contentAlignment = Alignment.Center
+        Button(
+            onClick = onStop, modifier = Modifier.heightIn(min = 48.dp).widthIn(min = 92.dp),
+            shape = RoundedCornerShape(8.dp), colors = ButtonDefaults.buttonColors(containerColor = EvaColors.Action, contentColor = Color.White)
         ) {
             Row(verticalAlignment = Alignment.CenterVertically) {
                 Icon(
                     Icons.Rounded.CheckCircle,
-                    contentDescription = "Finish recording",
+                    contentDescription = null,
                     tint = Color.White,
                     modifier = Modifier.size(18.dp)
                 )
@@ -925,15 +897,13 @@ fun VoicePreviewComposer(
         IconButton(onClick = onDelete, enabled = !sending) {
             Icon(Icons.Rounded.Delete, contentDescription = "Delete recording", tint = evaMuted())
         }
-        Box(
-            modifier = Modifier
-                .size(46.dp)
-                .clip(CircleShape)
-                .background(EvaColors.Gradient)
-                .clickable(enabled = !sending, onClick = onSend),
-            contentAlignment = Alignment.Center
+        FilledIconButton(
+            onClick = onSend, enabled = !sending, modifier = Modifier.size(50.dp),
+            colors = IconButtonDefaults.filledIconButtonColors(containerColor = EvaColors.Action, contentColor = Color.White,
+                disabledContainerColor = EvaColors.Action, disabledContentColor = Color.White)
         ) {
-            Icon(
+            if (sending) CircularProgressIndicator(Modifier.size(20.dp), color = Color.White, strokeWidth = 2.dp)
+            else Icon(
                 Icons.Rounded.Send,
                 contentDescription = "Send recording",
                 tint = Color.White
