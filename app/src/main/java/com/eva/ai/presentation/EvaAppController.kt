@@ -74,7 +74,6 @@ class EvaAppController @Inject constructor(
                 loadChats()
                 refreshSubscription(silent = true)
                 syncDeviceToken()
-                notice = welcomeNotice(user.name)
                 pendingConversationId?.let { requested ->
                     pendingConversationId = null
                     openConversation(requested)

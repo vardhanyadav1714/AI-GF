@@ -6,6 +6,7 @@ import android.content.pm.PackageManager
 import android.os.Build
 import android.os.Bundle
 import android.util.Base64
+import android.util.Log
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
@@ -30,6 +31,7 @@ import com.eva.ai.presentation.acceptAuthRedirect
 import com.eva.ai.presentation.openConversationFromNotification
 import com.eva.ai.presentation.refreshSubscription
 import com.eva.ai.presentation.signInWithGoogle
+import com.eva.ai.presentation.googleSignInUri
 import com.eva.ai.presentation.startPremiumSubscription
 import com.eva.ai.presentation.userChoiceBillingEnabled
 import com.eva.ai.presentation.syncDeviceToken
@@ -45,6 +47,7 @@ import com.eva.ai.data.billing.PlayBillingManager
 import dagger.hilt.android.AndroidEntryPoint
 import javax.inject.Inject
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
 import com.eva.ai.domain.model.AuthState
@@ -248,11 +251,18 @@ class MainActivity : ComponentActivity(), PaymentResultWithDataListener {
             controller.authBusy = true
             val idToken = runCatching { requestGoogleIdToken() }
                 .onFailure { error ->
+                    if (error is CancellationException) {
+                        controller.authBusy = false
+                        throw error
+                    }
+                    // Exception messages and credentials may contain account information.
+                    Log.w("EvaAuth", "Credential sign-in failed: ${error.javaClass.simpleName}")
                     controller.notice = when (error) {
-                        is GetCredentialCancellationException -> "Google sign-in cancelled."
+                        is GetCredentialCancellationException -> null
                         is GoogleIdTokenParsingException -> "Google sign-in response could not be read."
                         else -> "Google sign-in could not start. Check Firebase OAuth setup."
                     }
+                    if (error is GetCredentialCancellationException) offerBrowserSignIn()
                 }
                 .getOrNull()
             controller.authBusy = false
@@ -260,6 +270,22 @@ class MainActivity : ComponentActivity(), PaymentResultWithDataListener {
                 controller.signInWithGoogle(idToken)
             }
         }
+    }
+
+    private fun offerBrowserSignIn() {
+        if (isFinishing || isDestroyed) return
+        android.app.AlertDialog.Builder(this)
+            .setTitle("Continue with Google?")
+            .setMessage("The account picker did not complete sign-in.")
+            .setPositiveButton("Continue in browser") { _, _ ->
+                runCatching {
+                    startActivity(Intent(Intent.ACTION_VIEW, controller.googleSignInUri()))
+                }.onFailure {
+                    controller.notice = "Could not open your browser. Please try again."
+                }
+            }
+            .setNegativeButton("Cancel", null)
+            .show()
     }
 
     private suspend fun requestGoogleIdToken(): String {
@@ -302,6 +328,7 @@ class MainActivity : ComponentActivity(), PaymentResultWithDataListener {
     private fun handleAuthIntent(intent: Intent?) {
         val uri = intent?.data ?: return
         if (uri.scheme != "ai-companion" || uri.host != "auth") return
+        intent.data = null
         lifecycleScope.launch {
             controller.acceptAuthRedirect(uri)
         }
