@@ -224,7 +224,16 @@ fun EvaShell(
                         scope.launch { controller.refreshSubscription() }
                     },
                     onRestore = onRestorePurchases,
-                    onCancel = { scope.launch { controller.cancelPremiumRenewal() } }
+                    onCancel = { scope.launch { controller.cancelPremiumRenewal() } },
+                    billingState = controller.billingAdministrativeArea,
+                    billingStateRequired = controller.razorpayBillingStateRequired,
+                    onBillingStateChanged = { state ->
+                        val owner = (controller.authState as? AuthState.SignedIn)?.user?.id
+                        if (owner != null && state in com.eva.ai.data.billing.IndiaBillingPolicy.administrativeAreas) {
+                            controller.settingsStore.saveBillingState(owner, state)
+                            controller.billingAdministrativeArea = state
+                        }
+                    }
                 )
 
                 controller.activeTab == EvaTab.Home -> HomeScreen(

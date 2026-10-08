@@ -44,6 +44,16 @@ class EvaSettingsStore @Inject constructor(
             .apply()
     }
 
+    fun billingState(userId: String): String? = prefs.getString(billingStateKey(userId), null)
+
+    fun saveBillingState(userId: String, state: String) {
+        prefs.edit().putString(billingStateKey(userId), state).apply()
+    }
+
+    private fun billingStateKey(userId: String): String = "billing_state_" +
+        java.security.MessageDigest.getInstance("SHA-256").digest(userId.toByteArray(Charsets.UTF_8))
+            .joinToString("") { "%02x".format(it.toInt() and 0xff) }
+
     private companion object {
         const val KEY_SELECTED_COMPANION_ID = "selected_companion_id"
         const val KEY_SELECTED_REPLY_STYLE_ID = "selected_reply_style_id"

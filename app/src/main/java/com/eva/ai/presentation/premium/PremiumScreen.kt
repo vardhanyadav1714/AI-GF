@@ -22,6 +22,7 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.eva.ai.BuildConfig
 import com.eva.ai.data.audio.openExternalUrl
+import com.eva.ai.data.billing.IndiaBillingPolicy
 import com.eva.ai.R
 import com.eva.ai.domain.model.SubscriptionState
 import com.eva.ai.presentation.components.*
@@ -32,7 +33,9 @@ fun PremiumScreen(
     checkoutBusy: Boolean, refreshBusy: Boolean, restoreBusy: Boolean,
     verifyBusy: Boolean, cancelBusy: Boolean,
     onBack: () -> Unit, onContinue: () -> Unit, onRefresh: () -> Unit,
-    onRestore: () -> Unit, onCancel: () -> Unit
+    onRestore: () -> Unit, onCancel: () -> Unit,
+    billingState: String?, billingStateRequired: Boolean,
+    onBillingStateChanged: (String) -> Unit
 ) {
     val context = LocalContext.current
     val active = subscription?.active == true
@@ -91,13 +94,33 @@ fun PremiumScreen(
                         }
                     }
                 } else {
+                    if (billingStateRequired || billingState != null) {
+                        var statesExpanded by remember { mutableStateOf(false) }
+                        Box(Modifier.fillMaxWidth()) {
+                            OutlinedButton(enabled = !busy, onClick = { statesExpanded = true }, modifier = Modifier.fillMaxWidth().heightIn(min = 48.dp), shape = RoundedCornerShape(8.dp)) {
+                                Icon(Icons.Rounded.LocationOn, null, Modifier.size(18.dp))
+                                Spacer(Modifier.width(8.dp))
+                                Text(billingState?.lowercase()?.replaceFirstChar { it.uppercase() } ?: "Select your billing state", modifier = Modifier.weight(1f), maxLines = 2)
+                                Icon(Icons.Rounded.ExpandMore, null)
+                            }
+                            DropdownMenu(expanded = statesExpanded, onDismissRequest = { statesExpanded = false }, modifier = Modifier.heightIn(max = 320.dp)) {
+                                IndiaBillingPolicy.administrativeAreas.forEach { state ->
+                                    DropdownMenuItem(text = { Text(state.lowercase().replaceFirstChar { it.uppercase() }) }, onClick = {
+                                        statesExpanded = false
+                                        onBillingStateChanged(state)
+                                    })
+                                }
+                            }
+                        }
+                    }
                     val confirmingPayment = verifyBusy && !restoreBusy
-                    Button(onClick = onContinue, enabled = !busy, shape = RoundedCornerShape(8.dp), colors = ButtonDefaults.buttonColors(containerColor = EvaColors.Pink), modifier = Modifier.fillMaxWidth().heightIn(min = 56.dp)) {
+                    Button(onClick = onContinue, enabled = !busy && (!billingStateRequired || billingState != null), shape = RoundedCornerShape(8.dp), colors = ButtonDefaults.buttonColors(containerColor = EvaColors.Pink), modifier = Modifier.fillMaxWidth().heightIn(min = 56.dp)) {
                         BusyIcon(checkoutBusy || confirmingPayment, Icons.Rounded.LockOpen)
                         Spacer(Modifier.width(10.dp))
                         Text(when {
                             checkoutBusy -> "Opening checkout..."
                             confirmingPayment -> "Confirming payment..."
+                            billingStateRequired -> "Continue with Razorpay"
                             BuildConfig.ALTERNATIVE_BILLING_ENABLED -> "Choose payment method"
                             else -> "Subscribe with Google Play"
                         }, fontWeight = FontWeight.SemiBold, maxLines = 2)

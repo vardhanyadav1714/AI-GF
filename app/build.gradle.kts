@@ -83,6 +83,7 @@ dependencies {
     implementation(libs.androidx.lifecycle.runtime.ktx)
     implementation(libs.firebase.messaging)
     implementation(libs.googleid)
+    implementation("com.google.android.gms:play-services-auth:22.0.0")
     implementation("com.android.billingclient:billing-ktx:9.1.0")
     implementation("com.razorpay:checkout:1.6.41") {
         exclude(group = "com.razorpay", module = "standard-core")

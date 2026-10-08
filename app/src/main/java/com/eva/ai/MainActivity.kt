@@ -11,6 +11,11 @@ import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
 import androidx.activity.result.contract.ActivityResultContracts
+import androidx.activity.result.IntentSenderRequest
+import com.google.android.gms.auth.api.identity.Identity
+import com.google.android.gms.auth.api.identity.GetPhoneNumberHintIntentRequest
+import com.eva.ai.data.billing.IndiaBillingPolicy
+import com.eva.ai.data.billing.normalizeBillingPhone
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
@@ -67,11 +72,21 @@ class MainActivity : ComponentActivity(), PaymentResultWithDataListener {
     private val purchaseVerificationMutex = Mutex()
     private var razorpaySubscriptionId: String? = null
     private var razorpayAccountId: String? = null
+    private data class RazorpayChoice(val token: String, val owner: String)
+    private var pendingRazorpayChoice: RazorpayChoice? = null
+    private var phoneHintChoice: RazorpayChoice? = null
+    private var phoneHintTicket: Long? = null
+    private val phoneHintLauncher = registerForActivityResult(ActivityResultContracts.StartIntentSenderForResult()) { result ->
+        val phone = if (result.resultCode == RESULT_OK && result.data != null) runCatching {
+            Identity.getSignInClient(this).getPhoneNumberFromIntent(result.data!!)
+        }.getOrNull() else null
+        finishPhoneHint(phone)
+    }
     private val playBilling: PlayBillingManager by lazy {
         PlayBillingManager(
             context = this,
             onAlternativeBilling = { token, country ->
-                if (country == "IN") selectBillingState(token)
+                if (country == "IN") prepareRazorpayChoice(token)
             },
             onPurchased = { purchaseToken, productId ->
                 lifecycleScope.launch {
@@ -119,7 +134,25 @@ class MainActivity : ComponentActivity(), PaymentResultWithDataListener {
                 controller.bootstrap()
             }
             LaunchedEffect(controller.authState) {
-                if (controller.authState is AuthState.SignedIn) playBilling.restorePurchases()
+                val owner = (controller.authState as? AuthState.SignedIn)?.user?.id
+                controller.billingAdministrativeArea = owner?.let { controller.settingsStore.billingState(it) }
+                    ?.takeIf { it in IndiaBillingPolicy.administrativeAreas }
+                if (pendingRazorpayChoice?.owner != owner) {
+                    pendingRazorpayChoice = null
+                    controller.razorpayBillingStateRequired = false
+                }
+                if (owner != null) playBilling.restorePurchases()
+            }
+            LaunchedEffect(controller.billingAdministrativeArea, controller.razorpayBillingStateRequired) {
+                if (controller.razorpayBillingStateRequired && controller.billingAdministrativeArea != null && !controller.subscriptionBusy) {
+                    requestBillingPhoneHint()
+                }
+            }
+            LaunchedEffect(controller.premiumOpen) {
+                if (!controller.premiumOpen && controller.razorpayBillingStateRequired) {
+                    pendingRazorpayChoice = null
+                    controller.razorpayBillingStateRequired = false
+                }
             }
 
             EvaApplication(
@@ -130,7 +163,9 @@ class MainActivity : ComponentActivity(), PaymentResultWithDataListener {
                 },
                 onGooglePlaySubscribe = {
                     controller.notice = null
-                    if (!controller.subscriptionBusy) lifecycleScope.launch {
+                    if (pendingRazorpayChoice != null && !controller.subscriptionBusy) {
+                        requestBillingPhoneHint()
+                    } else if (!controller.subscriptionBusy) lifecycleScope.launch {
                         val enabled = controller.withBillingOperation(BillingOperation.Checkout) {
                             controller.userChoiceBillingEnabled()
                         }
@@ -199,6 +234,8 @@ class MainActivity : ComponentActivity(), PaymentResultWithDataListener {
     }
 
     override fun onDestroy() {
+        phoneHintTicket?.let { controller.endBillingOperation(it) }
+        phoneHintTicket = null
         playBilling.close()
         super.onDestroy()
     }
@@ -209,20 +246,54 @@ class MainActivity : ComponentActivity(), PaymentResultWithDataListener {
         super.onSaveInstanceState(outState)
     }
 
-    private fun selectBillingState(token: String) {
+    private fun prepareRazorpayChoice(token: String) {
         val userId = (controller.authState as? AuthState.SignedIn)?.user?.id ?: return
-        android.app.AlertDialog.Builder(this)
-            .setTitle("Billing state / union territory")
-            .setItems(com.eva.ai.data.billing.IndiaBillingPolicy.administrativeAreas.toTypedArray()) { _, index ->
-                if ((controller.authState as? AuthState.SignedIn)?.user?.id == userId) {
-                    openRazorpaySubscription(token, com.eva.ai.data.billing.IndiaBillingPolicy.administrativeAreas[index])
-                }
-            }
-            .setNegativeButton("Cancel") { _, _ -> controller.notice = "Checkout cancelled." }
-            .show()
+        pendingRazorpayChoice = RazorpayChoice(token, userId)
+        controller.billingAdministrativeArea = controller.settingsStore.billingState(userId)
+            ?.takeIf { it in IndiaBillingPolicy.administrativeAreas }
+        if (controller.billingAdministrativeArea != null) requestBillingPhoneHint()
+        else {
+            controller.razorpayBillingStateRequired = true
+            controller.premiumOpen = true
+        }
     }
 
-    private fun openRazorpaySubscription(externalTransactionToken: String, billingAdministrativeArea: String) {
+    private fun requestBillingPhoneHint() {
+        val choice = pendingRazorpayChoice ?: return
+        if (phoneHintTicket != null || choice.owner != (controller.authState as? AuthState.SignedIn)?.user?.id) return
+        val state = controller.billingAdministrativeArea ?: return
+        if (state !in IndiaBillingPolicy.administrativeAreas) return
+        controller.razorpayBillingStateRequired = false
+        phoneHintTicket = controller.beginBillingOperation(BillingOperation.Checkout)
+        phoneHintChoice = choice
+        // Google's consent-based selector needs no phone/SMS permissions.
+        Identity.getSignInClient(this)
+            .getPhoneNumberHintIntent(GetPhoneNumberHintIntentRequest.builder().build())
+            .addOnSuccessListener(this) { pendingIntent ->
+                if (phoneHintChoice != choice || phoneHintTicket == null) return@addOnSuccessListener
+                if (pendingRazorpayChoice != choice) {
+                    finishPhoneHint(null)
+                    return@addOnSuccessListener
+                }
+                runCatching { phoneHintLauncher.launch(IntentSenderRequest.Builder(pendingIntent).build()) }
+                    .onFailure { finishPhoneHint(null) }
+            }
+            .addOnFailureListener(this) { if (phoneHintChoice == choice) finishPhoneHint(null) }
+    }
+
+    private fun finishPhoneHint(phone: String?) {
+        phoneHintTicket?.let { controller.endBillingOperation(it) }
+        phoneHintTicket = null
+        val choice = phoneHintChoice ?: return
+        phoneHintChoice = null
+        if (pendingRazorpayChoice != choice) return
+        pendingRazorpayChoice = null
+        val state = controller.billingAdministrativeArea ?: return
+        if (choice.owner != (controller.authState as? AuthState.SignedIn)?.user?.id) return
+        openRazorpaySubscription(choice.token, state, normalizeBillingPhone(phone))
+    }
+
+    private fun openRazorpaySubscription(externalTransactionToken: String, billingAdministrativeArea: String, phone: String? = null) {
         if (!BuildConfig.ALTERNATIVE_BILLING_ENABLED || externalTransactionToken.isBlank() || razorpaySubscriptionId != null) return
         val user = (controller.authState as? AuthState.SignedIn)?.user ?: return
         lifecycleScope.launch {
@@ -236,11 +307,14 @@ class MainActivity : ComponentActivity(), PaymentResultWithDataListener {
             razorpayAccountId = user.id
             runCatching {
                 Checkout.preload(applicationContext)
+                val prefill = JSONObject().put("email", user.email).put("name", user.name)
+                if (phone != null) prefill.put("contact", phone)
                 val options = JSONObject()
                     .put("name", "Eva")
                     .put("description", "Monthly Premium subscription - renews until cancelled")
                     .put("subscription_id", checkout.subscriptionId)
-                    .put("prefill", JSONObject().put("email", user.email).put("name", user.name))
+                    .put("prefill", prefill)
+                    .put("allow_rotation", true)
                     .put("theme", JSONObject().put("color", "#b72c50"))
                 Checkout().apply { setKeyID(checkout.keyId) }.open(this@MainActivity, options)
             }.onFailure {
