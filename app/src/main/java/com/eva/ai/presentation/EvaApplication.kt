@@ -110,10 +110,12 @@ fun EvaApplication(
 
             Scaffold(
                 containerColor = Color.Transparent,
+                contentWindowInsets = WindowInsets(0, 0, 0, 0),
                 snackbarHost = { SnackbarHost(snackbarHostState) }
-            ) { _ ->
+            ) { scaffoldPadding ->
                 Box(
                     modifier = Modifier.fillMaxSize()
+                        .padding(scaffoldPadding)
                         .windowInsetsPadding(WindowInsets.safeDrawing.only(WindowInsetsSides.Horizontal))
                 ) {
                     when (val auth = controller.authState) {
@@ -196,7 +198,7 @@ fun EvaShell(
         if (controller.needsDateOfBirth) {
             DateOfBirthDialog(
                 busy = controller.authBusy,
-                onSkip = { controller.needsDateOfBirth = false },
+                onSkip = { scope.launch { controller.signOut() } },
                 onSave = { iso, name, place, useForBilling ->
                     scope.launch { controller.saveDateOfBirth(iso, name, place, useForBilling) }
                 },

@@ -94,7 +94,7 @@ fun PremiumScreen(
                 Column(verticalArrangement = Arrangement.spacedBy(18.dp)) {
                     Benefit(Icons.Rounded.ChatBubbleOutline, "Every companion", "One membership across your Eva account")
                     Benefit(Icons.Rounded.Psychology, "Shared memory", "Continue your story across companions")
-                    Benefit(Icons.Rounded.GraphicEq, "Voice conversations", "Voice notes and audio replies")
+                    Benefit(Icons.Rounded.GraphicEq, "Voice conversations", "60-second notes; 30 minutes per day")
                 }
                 HorizontalDivider(color = evaMuted().copy(alpha = 0.18f))
                 if (active) {

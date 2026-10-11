@@ -5,7 +5,6 @@
         <item name="android:windowNoTitle">true</item>
         <item name="android:windowActionBar">false</item>
         <item name="android:windowLightStatusBar">false</item>
-        <item name="android:windowLightNavigationBar">false</item>
         <item name="android:windowDrawsSystemBarBackgrounds">true</item>
         <!-- Brand-colored launch background: no white flash on cold start. -->
         <item name="android:windowBackground">@color/eva_ink</item>

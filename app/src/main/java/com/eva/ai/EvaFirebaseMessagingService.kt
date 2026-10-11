@@ -187,7 +187,11 @@ object EvaNotificationCenter {
             builder.addAction(0, "Dismiss", dismiss)
         }
 
-        NotificationManagerCompat.from(context).notify(notificationId, builder.build())
+        try {
+            NotificationManagerCompat.from(context).notify(notificationId, builder.build())
+        } catch (_: SecurityException) {
+            // Notification permission can be revoked after the earlier check.
+        }
     }
 
     fun canPostNotifications(context: Context): Boolean =

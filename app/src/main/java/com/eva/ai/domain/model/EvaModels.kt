@@ -105,7 +105,8 @@ data class SubscriptionCheckout(
 data class VoiceRecordingPreview(
     val audioBytes: ByteArray,
     val mimeType: String,
-    val durationSeconds: Int
+    val durationSeconds: Int,
+    val requestId: String = java.util.UUID.randomUUID().toString()
 ) {
     override fun equals(other: Any?): Boolean =
         other is VoiceRecordingPreview &&

@@ -242,7 +242,8 @@ fun ChatScreen(controller: EvaAppController, scope: CoroutineScope) {
                 val result = controller.sendVoiceNote(
                     audioBytes = preview.audioBytes,
                     mimeType = preview.mimeType,
-                    voiceSeconds = preview.durationSeconds
+                    voiceSeconds = preview.durationSeconds,
+                    requestId = preview.requestId
                 )
                 if (result == null && controller.selectedCompanion.id == previewCompanionId && voicePreview == null) {
                     voicePreview = preview

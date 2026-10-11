@@ -37,11 +37,12 @@ class MeriGfApi @Inject constructor(
     @ApplicationContext private val context: Context
 ) {
     private val prefs = context.getSharedPreferences("meri_gf_session", Context.MODE_PRIVATE)
+    private val tokens = SecureSessionTokens(prefs)
     private val baseUrl = context.getString(R.string.backend_base_url).trimEnd('/')
 
-    fun savedAccessToken(): String? = prefs.getString("access_token", null)
+    fun savedAccessToken(): String? = tokens.read("access_token")
 
-    private fun savedRefreshToken(): String? = prefs.getString("refresh_token", null)
+    private fun savedRefreshToken(): String? = tokens.read("refresh_token")
 
     fun hasSavedSession(): Boolean =
         !savedAccessToken().isNullOrBlank() || !savedRefreshToken().isNullOrBlank()
@@ -63,6 +64,9 @@ class MeriGfApi @Inject constructor(
         androidx.work.WorkManager.getInstance(context).cancelAllWorkByTag("eva-notification-replies")
         prefs.edit().clear().apply()
     }
+    suspend fun revokeSession() {
+        if (hasSavedSession()) requestObject("POST", "/auth/logout", JSONObject())
+    }
 
     fun googleSignInUri(): Uri {
         val redirectUri = "ai-companion://auth/google"
@@ -81,10 +85,7 @@ class MeriGfApi @Inject constructor(
     }
 
     suspend fun saveRedirectSession(accessToken: String, refreshToken: String?): AuthSession {
-        prefs.edit()
-            .putString("access_token", accessToken)
-            .putString("refresh_token", refreshToken)
-            .apply()
+        tokens.save(accessToken, refreshToken)
 
         val user = runCatching { me() }
             .getOrElse {
@@ -340,9 +341,11 @@ class MeriGfApi @Inject constructor(
         audioBytes: ByteArray,
         mimeType: String,
         companion: CompanionProfile,
-        replyStyle: ReplyStyle
+        replyStyle: ReplyStyle,
+        requestId: String = UUID.randomUUID().toString()
     ): VoiceSendResult {
         val body = JSONObject()
+            .put("requestId", requestId)
             .put("conversationId", conversationId.orEmpty())
             .put("companionId", companion.id)
             .put("personalityMode", replyStyle.id)
@@ -417,10 +420,7 @@ class MeriGfApi @Inject constructor(
         val refreshToken = data.bestString("refreshToken", default = "").ifBlank { null }
         val user = parseUser(data.optJSONObject("user") ?: data)
 
-        prefs.edit()
-            .putString("access_token", accessToken)
-            .putString("refresh_token", refreshToken)
-            .apply()
+        tokens.save(accessToken, refreshToken)
         saveUser(user)
 
         return AuthSession(accessToken, refreshToken, user)

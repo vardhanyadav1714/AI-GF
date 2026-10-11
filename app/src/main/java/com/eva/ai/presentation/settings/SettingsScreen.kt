@@ -177,6 +177,7 @@ fun PersonalityModeChip(
 
 @Composable
 fun ProfileScreen(controller: EvaAppController, user: EvaUser, scope: CoroutineScope, onEditProfile: () -> Unit = {}) {
+    val context = LocalContext.current
     val companion = controller.selectedCompanion
     val displayName = user.name.ifBlank {
         user.email.substringBefore("@").replaceFirstChar {
@@ -379,6 +380,16 @@ fun ProfileScreen(controller: EvaAppController, user: EvaUser, scope: CoroutineS
                             )
                         }
                         ProfileRow(Icons.Rounded.PersonOutline, "Signed in as", user.email.ifBlank { "Email unavailable" })
+                        TextButton(onClick = {
+                            openExternalUrl(context, "https://api.merigf.com/account/delete") { controller.notice = "Could not open account deletion." }
+                        }, modifier = Modifier.fillMaxWidth()) {
+                            Icon(Icons.Rounded.DeleteOutline, null, Modifier.size(18.dp))
+                            Spacer(Modifier.width(8.dp))
+                            Text("Delete account and data", color = EvaColors.Pink)
+                        }
+                        TextButton(onClick = {
+                            openExternalUrl(context, "https://merigf.com/privacy") { controller.notice = "Could not open privacy policy." }
+                        }, modifier = Modifier.fillMaxWidth()) { Text("Privacy policy") }
                         TextButton(
                             onClick = { scope.launch { controller.signOut() } },
                             modifier = Modifier.fillMaxWidth()

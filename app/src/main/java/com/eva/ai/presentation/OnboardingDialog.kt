@@ -70,7 +70,7 @@ fun DateOfBirthDialog(
     if (dateOpen) BirthdayWheelDialog(birthday, onDismiss = { dateOpen = false }) {
         birthday = it; dateOpen = false; error = null
     }
-    AlertDialog(onDismissRequest = { if (!busy) onSkip() }, shape = RoundedCornerShape(8.dp),
+    AlertDialog(onDismissRequest = {}, shape = RoundedCornerShape(8.dp),
         containerColor = if (isEvaLight()) Color.White else EvaColors.InkHigh,
         title = { Text("A little about you", fontWeight = FontWeight.SemiBold) },
         text = {
@@ -123,7 +123,7 @@ fun DateOfBirthDialog(
                     else -> onSave(birthday!!, name.trim(), PlaceSuggestion(placeId!!, placeLabel, country, state), useForBilling && state != null)
                 }
             }) { Text(if (busy) "Saving..." else "Continue") }
-        }, dismissButton = { TextButton(enabled = !busy, onClick = onSkip) { Text("Later") } })
+        }, dismissButton = { TextButton(enabled = !busy, onClick = onSkip) { Text("Sign out") } })
 }
 
 @Composable

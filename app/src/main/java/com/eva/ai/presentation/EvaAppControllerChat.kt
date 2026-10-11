@@ -170,7 +170,8 @@ suspend fun EvaAppController.reportLastAssistantReply() {
 suspend fun EvaAppController.sendVoiceNote(
     audioBytes: ByteArray,
     mimeType: String = "audio/mp4",
-    voiceSeconds: Int = max(1, audioBytes.size / 8000)
+    voiceSeconds: Int = max(1, audioBytes.size / 8000),
+    requestId: String = java.util.UUID.randomUUID().toString()
 ): VoiceSendResult? {
     if (audioBytes.isEmpty()) {
         notice = "I could not hear anything. Try again."
@@ -215,7 +216,8 @@ suspend fun EvaAppController.sendVoiceNote(
                 audioBytes = audioBytes,
                 mimeType = mimeType,
                 companion = selectedCompanion,
-                replyStyle = selectedReplyStyle
+                replyStyle = selectedReplyStyle,
+                requestId = requestId
             )
         }
     }

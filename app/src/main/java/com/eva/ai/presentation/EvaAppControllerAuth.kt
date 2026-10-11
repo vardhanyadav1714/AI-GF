@@ -100,6 +100,7 @@ suspend fun EvaAppController.acceptAuthRedirect(uri: Uri) {
 
 suspend fun EvaAppController.signOut() {
     runCatching { api.unregisterFcmDevice() }
+    runCatching { api.revokeSession() }
     api.clearSession()
     authState = AuthState.SignedOut
     needsDateOfBirth = false
