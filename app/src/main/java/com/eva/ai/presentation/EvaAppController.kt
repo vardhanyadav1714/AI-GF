@@ -47,6 +47,7 @@ class EvaAppController @Inject constructor(
     var subscriptionState by mutableStateOf<SubscriptionState?>(null)
     var billingAdministrativeArea by mutableStateOf<String?>(null)
     var razorpayBillingStateRequired by mutableStateOf(false)
+    internal val billingAddressMutex = kotlinx.coroutines.sync.Mutex()
     private val billingOperations = BillingOperationTracker()
     val subscriptionBusy: Boolean get() = billingOperations.busy
     fun billingBusy(operation: BillingOperation): Boolean = billingOperations.busy(operation)

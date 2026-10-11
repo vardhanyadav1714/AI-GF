@@ -12,7 +12,7 @@ import androidx.compose.ui.unit.dp
 
 private val DarkColorScheme = darkColorScheme(
     primary = EvaPink,
-    onPrimary = Color.White,
+    onPrimary = EvaInk,
     primaryContainer = EvaPurple.copy(alpha = 0.24f),
     onPrimaryContainer = Color.White,
     secondary = EvaPurple,
@@ -35,7 +35,7 @@ private val DarkColorScheme = darkColorScheme(
 
 private val LightColorScheme = lightColorScheme(
     primary = EvaPink,
-    onPrimary = Color.White,
+    onPrimary = EvaInk,
     primaryContainer = EvaPink.copy(alpha = 0.14f),
     onPrimaryContainer = EvaOnDark,
     secondary = EvaPurple,

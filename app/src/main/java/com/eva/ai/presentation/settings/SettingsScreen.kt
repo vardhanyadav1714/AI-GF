@@ -13,6 +13,7 @@ import android.os.Bundle
 import android.text.format.DateFormat
 import android.util.Base64
 import androidx.activity.ComponentActivity
+import androidx.activity.compose.BackHandler
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
 import androidx.activity.compose.rememberLauncherForActivityResult
@@ -28,6 +29,7 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.rounded.*
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
+import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -174,7 +176,7 @@ fun PersonalityModeChip(
 }
 
 @Composable
-fun ProfileScreen(controller: EvaAppController, user: EvaUser, scope: CoroutineScope) {
+fun ProfileScreen(controller: EvaAppController, user: EvaUser, scope: CoroutineScope, onEditProfile: () -> Unit = {}) {
     val companion = controller.selectedCompanion
     val displayName = user.name.ifBlank {
         user.email.substringBefore("@").replaceFirstChar {
@@ -237,19 +239,21 @@ fun ProfileScreen(controller: EvaAppController, user: EvaUser, scope: CoroutineS
                         Column(modifier = Modifier.weight(1f)) {
                             Text(
                                 displayName,
-                                fontSize = 24.sp,
+                                fontSize = 20.sp,
                                 fontWeight = FontWeight.Bold,
-                                maxLines = 1
+                                maxLines = 2,
+                                overflow = TextOverflow.Ellipsis
                             )
                             Spacer(Modifier.height(4.dp))
                             Text(
                                 accountEmail,
                                 color = evaMuted(),
                                 fontSize = 13.sp,
-                                maxLines = 1
+                                maxLines = 2,
+                                overflow = TextOverflow.Ellipsis
                             )
                             Spacer(Modifier.height(12.dp))
-                            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                            FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
                                 Box(
                                     modifier = Modifier
                                         .clip(RoundedCornerShape(999.dp))
@@ -317,13 +321,25 @@ fun ProfileScreen(controller: EvaAppController, user: EvaUser, scope: CoroutineS
                 )
             }
             item {
+                Row(
+                    Modifier.fillMaxWidth().clip(RoundedCornerShape(8.dp))
+                        .clickable(onClick = onEditProfile).padding(horizontal = 12.dp, vertical = 16.dp),
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(12.dp)
+                ) {
+                    Icon(Icons.Rounded.Edit, contentDescription = null, tint = EvaColors.Pink)
+                    Text("Edit profile", Modifier.weight(1f), fontWeight = FontWeight.SemiBold)
+                    Icon(Icons.Rounded.ChevronRight, contentDescription = null, tint = evaMuted())
+                }
+            }
+            item {
                 PersonalityModePicker(
                     selected = controller.selectedReplyStyle,
                     onSelect = controller::selectReplyStyle
                 )
             }
             item {
-                GlassCard {
+                Column(Modifier.fillMaxWidth().padding(vertical = 8.dp)) {
                     Column {
                         Text("About ${companion.name}", fontWeight = FontWeight.Bold, fontSize = 16.sp)
                         Spacer(Modifier.height(8.dp))
@@ -337,7 +353,6 @@ fun ProfileScreen(controller: EvaAppController, user: EvaUser, scope: CoroutineS
                         ProfileRow(Icons.Rounded.GraphicEq, "Voice & Style", companion.voiceStyle)
                         ProfileRow(Icons.Rounded.Star, "Interests", companion.interests)
                         ProfileRow(Icons.Rounded.LocationOn, "Born in", "${companion.bornIn} / ${companion.age}")
-                        ProfileEditor(controller, user, scope)
                         Row(
                             modifier = Modifier
                                 .fillMaxWidth()
@@ -368,7 +383,7 @@ fun ProfileScreen(controller: EvaAppController, user: EvaUser, scope: CoroutineS
                             onClick = { scope.launch { controller.signOut() } },
                             modifier = Modifier.fillMaxWidth()
                         ) {
-                            Text("Sign out", color = EvaColors.Coral, fontWeight = FontWeight.Bold)
+                            Text("Sign out", color = EvaColors.Pink, fontWeight = FontWeight.Bold)
                         }
                     }
                 }
@@ -378,72 +393,96 @@ fun ProfileScreen(controller: EvaAppController, user: EvaUser, scope: CoroutineS
 }
 
 @Composable
-fun ProfileEditor(controller: EvaAppController, user: EvaUser, scope: CoroutineScope) {
-    var editName by remember(user.name) { mutableStateOf(user.name) }
-    var editPreferred by remember(user.preferredName) { mutableStateOf(user.preferredName.orEmpty()) }
-    var editOccupation by remember(user.occupation) { mutableStateOf(user.occupation.orEmpty()) }
+fun EditProfileScreen(controller: EvaAppController, user: EvaUser, scope: CoroutineScope, onBack: () -> Unit) {
+    var changed by remember { mutableStateOf(false) }
     var saving by remember { mutableStateOf(false) }
-
-    GlassCard(modifier = Modifier.fillMaxWidth()) {
-        Column {
-            Row(verticalAlignment = Alignment.CenterVertically) {
-                Icon(Icons.Rounded.Edit, contentDescription = null, tint = EvaColors.Pink, modifier = Modifier.size(16.dp))
-                Spacer(Modifier.width(8.dp))
-                Text("Edit profile", fontWeight = FontWeight.Bold, fontSize = 15.sp)
+    var confirmDiscard by remember { mutableStateOf(false) }
+    fun close() {
+        if (saving) return
+        if (changed) confirmDiscard = true else onBack()
+    }
+    BackHandler { close() }
+    if (confirmDiscard) AlertDialog(
+        onDismissRequest = { confirmDiscard = false },
+        title = { Text("Discard changes?") },
+        confirmButton = { TextButton(onClick = { confirmDiscard = false; onBack() }) { Text("Discard") } },
+        dismissButton = { TextButton(onClick = { confirmDiscard = false }) { Text("Keep editing") } }
+    )
+    EvaPage {
+        Column(Modifier.fillMaxSize().statusBarsPadding().navigationBarsPadding().imePadding()) {
+            Row(Modifier.fillMaxWidth().padding(16.dp), verticalAlignment = Alignment.CenterVertically) {
+                IconGlassButton(Icons.Rounded.ArrowBack, "Back", onClick = { close() })
+                Spacer(Modifier.width(12.dp))
+                Text("Edit profile", fontWeight = FontWeight.Bold, fontSize = 22.sp)
             }
-            Spacer(Modifier.height(10.dp))
+            Column(Modifier.weight(1f).verticalScroll(rememberScrollState()).padding(horizontal = 16.dp)) {
+                ProfileEditor(controller, user, scope, onSaved = onBack,
+                    onDirtyChanged = { changed = it }, onSavingChanged = { saving = it })
+            }
+        }
+    }
+}
+
+@Composable
+fun ProfileEditor(controller: EvaAppController, user: EvaUser, scope: CoroutineScope,
+    onSaved: () -> Unit = {}, onDirtyChanged: (Boolean) -> Unit = {}, onSavingChanged: (Boolean) -> Unit = {}) {
+    var editName by rememberSaveable(user.id, user.name) { mutableStateOf(user.name) }
+    var editPreferred by rememberSaveable(user.id, user.preferredName) { mutableStateOf(user.preferredName.orEmpty()) }
+    var editOccupation by rememberSaveable(user.id, user.occupation) { mutableStateOf(user.occupation.orEmpty()) }
+    var birthday by rememberSaveable(user.id, user.dateOfBirth) { mutableStateOf(user.dateOfBirth?.take(10)) }
+    var dateOpen by remember { mutableStateOf(false) }
+    var saving by remember { mutableStateOf(false) }
+    val focus = LocalFocusManager.current
+    val changed = editName.trim() != user.name || editPreferred.trim() != user.preferredName.orEmpty() ||
+        editOccupation.trim() != user.occupation.orEmpty() || birthday != user.dateOfBirth?.take(10)
+    LaunchedEffect(changed) { onDirtyChanged(changed) }
+    LaunchedEffect(saving) { onSavingChanged(saving) }
+    if (dateOpen) BirthdayWheelDialog(birthday, onDismiss = { dateOpen = false }) {
+        birthday = it; dateOpen = false
+    }
+
+    Column(Modifier.fillMaxWidth().padding(vertical = 8.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
+        Column {
             EvaTextField(
                 value = editName,
-                onValueChange = { editName = it },
+                onValueChange = { if (!saving) editName = it.take(80) },
                 label = "Your name",
+                enabled = !saving,
                 imeAction = ImeAction.Next
             )
             Spacer(Modifier.height(8.dp))
             EvaTextField(
                 value = editPreferred,
-                onValueChange = { editPreferred = it },
+                onValueChange = { if (!saving) editPreferred = it.take(80) },
                 label = "What Eva calls you",
+                enabled = !saving,
                 imeAction = ImeAction.Next
             )
             Spacer(Modifier.height(8.dp))
             EvaTextField(
                 value = editOccupation,
-                onValueChange = { editOccupation = it },
+                onValueChange = { if (!saving) editOccupation = it.take(120) },
                 label = "Occupation",
+                enabled = !saving,
                 imeAction = ImeAction.Done
             )
-            Spacer(Modifier.height(10.dp))
-            Box(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .clip(RoundedCornerShape(16.dp))
-                    .background(
-                        if (saving || editName.isBlank()) {
-                            if (isEvaLight()) Color.Black.copy(alpha = 0.06f)
-                            else Color.White.copy(alpha = 0.08f)
-                        } else {
-                            EvaColors.Pink.copy(alpha = 0.16f)
-                        }
-                    )
-                    .clickable(enabled = !saving && editName.isNotBlank()) {
-                        scope.launch {
-                            saving = true
-                            controller.updateProfile(
-                                displayName = editName.trim(),
-                                preferredName = editPreferred.trim(),
-                                occupation = editOccupation.trim()
-                            )
-                            saving = false
-                        }
-                    }
-                    .padding(vertical = 13.dp),
-                contentAlignment = Alignment.Center
-            ) {
-                Text(
-                    if (saving) "Saving..." else "Save profile",
-                    color = if (saving || editName.isBlank()) evaMuted() else EvaColors.Pink,
-                    fontWeight = FontWeight.Bold
-                )
+            Spacer(Modifier.height(12.dp))
+            OutlinedButton(onClick = { focus.clearFocus(); dateOpen = true }, enabled = !saving,
+                shape = RoundedCornerShape(8.dp), modifier = Modifier.fillMaxWidth().heightIn(min = 52.dp)) {
+                Icon(Icons.Rounded.Cake, null, Modifier.size(18.dp))
+                Spacer(Modifier.width(10.dp))
+                Text(birthday?.split('-')?.reversed()?.joinToString(" / ") ?: "Add birthday", Modifier.weight(1f))
+                Icon(Icons.Rounded.ExpandMore, null)
+            }
+            Spacer(Modifier.height(12.dp))
+            PrimaryButton(Icons.Rounded.Check, "Save changes", enabled = changed && editName.isNotBlank(), busy = saving) {
+                focus.clearFocus()
+                scope.launch {
+                    saving = true
+                    try {
+                        if (controller.updateProfile(editName.trim(), editPreferred.trim(), editOccupation.trim(), birthday)) onSaved()
+                    } finally { saving = false }
+                }
             }
         }
     }

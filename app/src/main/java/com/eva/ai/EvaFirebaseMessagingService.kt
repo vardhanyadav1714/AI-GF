@@ -6,10 +6,12 @@ import android.app.NotificationManager
 import android.app.PendingIntent
 import android.content.Context
 import android.content.Intent
+import android.net.Uri
 import android.content.pm.PackageManager
 import android.os.Build
 import androidx.core.app.NotificationCompat
 import androidx.core.app.NotificationManagerCompat
+import androidx.core.app.RemoteInput
 import androidx.core.content.ContextCompat
 import com.eva.ai.data.remote.MeriGfApi
 import com.eva.ai.domain.logic.shouldSuppressChatNotification
@@ -23,7 +25,6 @@ import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.MutableStateFlow
-import kotlin.math.absoluteValue
 
 @AndroidEntryPoint
 class EvaFirebaseMessagingService : FirebaseMessagingService() {
@@ -36,6 +37,8 @@ class EvaFirebaseMessagingService : FirebaseMessagingService() {
         super.onMessageReceived(message)
 
         val data = message.data
+        val recipient = data["recipientUserId"]
+        if (recipient != null && api.savedUser()?.id != recipient) return
         val title = message.notification?.title
             ?: data["title"]
             ?: data["companionName"]?.let { "$it replied" }
@@ -55,7 +58,8 @@ class EvaFirebaseMessagingService : FirebaseMessagingService() {
             context = this,
             title = title,
             body = body,
-            conversationId = conversationId
+            conversationId = conversationId,
+            companionId = data["companionId"], recipientUserId = recipient, messageId = data["messageId"]
         )
     }
 
@@ -125,7 +129,12 @@ object EvaNotificationCenter {
         context: Context,
         title: String,
         body: String,
-        conversationId: String? = null
+        conversationId: String? = null,
+        companionId: String? = null,
+        recipientUserId: String? = null,
+        messageId: String? = null,
+        notificationId: Int = (messageId ?: "$conversationId:$body").hashCode() and Int.MAX_VALUE,
+        allowReply: Boolean = true
     ) {
         ensureChannels(context)
         if (!canPostNotifications(context)) return
@@ -133,6 +142,7 @@ object EvaNotificationCenter {
         val intent = Intent(context, MainActivity::class.java).apply {
             flags = Intent.FLAG_ACTIVITY_CLEAR_TOP or Intent.FLAG_ACTIVITY_SINGLE_TOP
             conversationId?.let { putExtra(EXTRA_CONVERSATION_ID, it) }
+            data = Uri.parse("eva-notification://open/${Uri.encode(conversationId ?: "inbox")}")
         }
         val pendingIntent = PendingIntent.getActivity(
             context,
@@ -141,7 +151,7 @@ object EvaNotificationCenter {
             PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
         )
 
-        val notification = NotificationCompat.Builder(
+        val builder = NotificationCompat.Builder(
             context,
             context.getString(R.string.eva_notifications_channel_id)
         )
@@ -152,10 +162,32 @@ object EvaNotificationCenter {
             .setStyle(NotificationCompat.BigTextStyle().bigText(body))
             .setContentIntent(pendingIntent)
             .setAutoCancel(true)
+            .setOnlyAlertOnce(true)
+            .setCategory(NotificationCompat.CATEGORY_MESSAGE)
+            .setVisibility(NotificationCompat.VISIBILITY_PRIVATE)
             .setPriority(NotificationCompat.PRIORITY_DEFAULT)
-            .build()
+        if (conversationId != null) {
+            fun actionIntent(action: String) = Intent(context, NotificationActionReceiver::class.java).apply {
+                this.action = action
+                data = Uri.parse("eva-notification://action/$action/$notificationId")
+                putExtra("conversationId", conversationId)
+                putExtra("notificationId", notificationId)
+                putExtra("companionId", companionId)
+                putExtra("recipientUserId", recipientUserId)
+            }
+            if (allowReply && companionId != null && recipientUserId != null) {
+                val mutable = if (Build.VERSION.SDK_INT >= 31) PendingIntent.FLAG_MUTABLE else 0
+                val reply = PendingIntent.getBroadcast(context, notificationId, actionIntent(NotificationActionReceiver.ACTION_REPLY), PendingIntent.FLAG_UPDATE_CURRENT or mutable)
+                builder.addAction(NotificationCompat.Action.Builder(0, "Reply", reply)
+                    .addRemoteInput(RemoteInput.Builder(NotificationActionReceiver.KEY_REPLY).setLabel("Your reply").build())
+                    .setSemanticAction(NotificationCompat.Action.SEMANTIC_ACTION_REPLY)
+                    .setAuthenticationRequired(true).setShowsUserInterface(false).build())
+            }
+            val dismiss = PendingIntent.getBroadcast(context, notificationId, actionIntent(NotificationActionReceiver.ACTION_DISMISS), PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE)
+            builder.addAction(0, "Dismiss", dismiss)
+        }
 
-        NotificationManagerCompat.from(context).notify(body.hashCode().absoluteValue, notification)
+        NotificationManagerCompat.from(context).notify(notificationId, builder.build())
     }
 
     fun canPostNotifications(context: Context): Boolean =

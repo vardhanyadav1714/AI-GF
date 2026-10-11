@@ -4,12 +4,37 @@ import com.eva.ai.domain.model.AuthState
 import com.eva.ai.domain.model.SubscriptionCheckout
 import com.eva.ai.domain.logic.cleanMessage
 import kotlinx.coroutines.CancellationException
+import kotlinx.coroutines.sync.withLock
+import com.eva.ai.data.billing.IndiaBillingPolicy
 
 private inline fun <T> billingResult(block: () -> T): Result<T> = runCatching(block).onFailure {
     if (it is CancellationException) throw it
 }
 
 private fun EvaAppController.billingUserId(): String? = (authState as? AuthState.SignedIn)?.user?.id
+
+suspend fun EvaAppController.restoreBillingState(owner: String) = billingAddressMutex.withLock {
+    if (billingUserId() != owner) return@withLock
+    val initial = billingAdministrativeArea
+    billingResult { api.billingState() }.onSuccess { stored ->
+        if (billingUserId() != owner || billingAdministrativeArea != initial) return@onSuccess
+        val state = stored?.takeIf { it in IndiaBillingPolicy.administrativeAreas }
+            ?: initial?.takeIf { it in IndiaBillingPolicy.administrativeAreas }
+        if (state != null) {
+            settingsStore.saveBillingState(owner, state)
+            billingAdministrativeArea = state
+            if (state != stored) billingResult { api.saveBillingState(state) }
+        }
+    }
+}
+
+suspend fun EvaAppController.persistBillingState(owner: String) = billingAddressMutex.withLock {
+    if (billingUserId() != owner) return@withLock
+    val state = billingAdministrativeArea?.takeIf { it in IndiaBillingPolicy.administrativeAreas } ?: return@withLock
+    billingResult { api.saveBillingState(state) }.onFailure {
+        android.util.Log.w("EvaBilling", "Billing state saved on device; account sync will retry at sign-in")
+    }
+}
 
 suspend fun EvaAppController.userChoiceBillingEnabled(): Boolean =
     billingResult { api.userChoiceBillingEnabled() }.getOrDefault(false)

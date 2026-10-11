@@ -13,6 +13,7 @@ import android.os.Bundle
 import android.text.format.DateFormat
 import android.util.Base64
 import androidx.activity.ComponentActivity
+import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
 import androidx.activity.SystemBarStyle
@@ -143,7 +144,6 @@ fun EvaApplication(
         }
     }
 }
-
 @Composable
 fun EvaSystemBars(lightMode: Boolean) {
     val view = LocalView.current
@@ -177,6 +177,7 @@ fun EvaShell(
 ) {
     val context = LocalContext.current
     var trialAcknowledged by remember(user.id) { mutableStateOf(controller.settingsStore.trialNoticeSeen(user.id)) }
+    var profileEditorOpen by rememberSaveable(user.id) { mutableStateOf(false) }
     val freeRemaining = controller.freeMessagesRemaining
     Box(Modifier.fillMaxSize()) {
         if (!controller.needsDateOfBirth && !controller.premiumOpen && shouldShowTrialNotice(
@@ -196,15 +197,17 @@ fun EvaShell(
             DateOfBirthDialog(
                 busy = controller.authBusy,
                 onSkip = { controller.needsDateOfBirth = false },
-                onSave = { iso, name ->
-                    scope.launch { controller.saveDateOfBirth(iso, name) }
-                }
+                onSave = { iso, name, place, useForBilling ->
+                    scope.launch { controller.saveDateOfBirth(iso, name, place, useForBilling) }
+                },
+                searchPlaces = { query -> controller.searchPlaces(query) }
             )
         }
         AnimatedContent(
             targetState = EvaShellState(
                 tab = controller.activeTab,
                 premiumOpen = controller.premiumOpen,
+                profileEditorOpen = profileEditorOpen,
                 lightMode = controller.lightMode ?: !isSystemInDarkTheme(),
                 companionId = controller.selectedCompanion.id
             ),
@@ -223,9 +226,9 @@ fun EvaShell(
                 }
             },
             label = "eva-shell"
-        ) { _ ->
+        ) { state ->
             when {
-                controller.premiumOpen -> PremiumScreen(
+                state.premiumOpen -> PremiumScreen(
                     subscription = controller.subscriptionState,
                     busy = controller.subscriptionBusy,
                     checkoutBusy = controller.billingBusy(BillingOperation.Checkout),
@@ -251,7 +254,7 @@ fun EvaShell(
                     }
                 )
 
-                controller.activeTab == EvaTab.Home -> HomeScreen(
+                state.tab == EvaTab.Home -> HomeScreen(
                     user = user,
                     companion = controller.selectedCompanion,
                     onCompanionSelect = controller::selectCompanion,
@@ -262,18 +265,25 @@ fun EvaShell(
                     }
                 )
 
-                controller.activeTab == EvaTab.Chat -> ChatScreen(controller, scope)
-                controller.activeTab == EvaTab.Profile -> ProfileScreen(
+                state.tab == EvaTab.Chat -> ChatScreen(controller, scope)
+                state.tab == EvaTab.Profile && state.profileEditorOpen -> EditProfileScreen(
                     controller = controller,
                     user = user,
-                    scope = scope
+                    scope = scope,
+                    onBack = { profileEditorOpen = false }
+                )
+                state.tab == EvaTab.Profile -> ProfileScreen(
+                    controller = controller,
+                    user = user,
+                    scope = scope,
+                    onEditProfile = { profileEditorOpen = true }
                 )
             }
         }
 
         AnimatedVisibility(
             visible = !controller.premiumOpen &&
-                controller.activeTab != EvaTab.Chat,
+                controller.activeTab != EvaTab.Chat && !profileEditorOpen,
             modifier = Modifier.align(Alignment.BottomCenter)
         ) {
             EvaBottomNav(
@@ -281,6 +291,7 @@ fun EvaShell(
                 onSelect = { tab ->
                     controller.activeTab = tab
                     controller.premiumOpen = false
+                    profileEditorOpen = false
                 }
             )
         }
@@ -291,110 +302,7 @@ fun EvaShell(
 private data class EvaShellState(
     val tab: EvaTab,
     val premiumOpen: Boolean,
+    val profileEditorOpen: Boolean,
     val lightMode: Boolean,
     val companionId: String
 )
-
-@Composable
-fun DateOfBirthDialog(
-    busy: Boolean,
-    onSkip: () -> Unit,
-    onSave: (isoDate: String, preferredName: String) -> Unit
-) {
-    var preferredName by remember { mutableStateOf("") }
-    var day by remember { mutableStateOf("") }
-    var month by remember { mutableStateOf("") }
-    var year by remember { mutableStateOf("") }
-    var error by remember { mutableStateOf<String?>(null) }
-
-    fun validatedIso(): String? {
-        val d = day.trim()
-        val m = month.trim()
-        val y = year.trim()
-        if (d.length != 2 || m.length != 2 || y.length != 4) return null
-        val dayInt = d.toIntOrNull() ?: return null
-        val monthInt = m.toIntOrNull() ?: return null
-        val yearInt = y.toIntOrNull() ?: return null
-        if (monthInt !in 1..12) return null
-        if (yearInt < 1900 || yearInt > java.util.Calendar.getInstance().get(java.util.Calendar.YEAR)) return null
-        val daysInMonth = when (monthInt) {
-            1, 3, 5, 7, 8, 10, 12 -> 31
-            4, 6, 9, 11 -> 30
-            else -> if (yearInt % 4 == 0 && (yearInt % 100 != 0 || yearInt % 400 == 0)) 29 else 28
-        }
-        if (dayInt !in 1..daysInMonth) return null
-        return "$yearInt-${m.padStart(2, '0')}-${d.padStart(2, '0')}"
-    }
-
-    AlertDialog(
-        onDismissRequest = onSkip,
-        containerColor = if (isEvaLight()) Color.White else EvaColors.InkHigh,
-        shape = RoundedCornerShape(24.dp),
-        title = {
-            Text(
-                "A little about you",
-                color = evaText(),
-                fontWeight = FontWeight.ExtraBold
-            )
-        },
-        text = {
-            Column {
-                EvaTextField(
-                    value = preferredName,
-                    onValueChange = { preferredName = it.take(80) },
-                    label = "What should we call you?",
-                    imeAction = ImeAction.Next
-                )
-                Spacer(Modifier.height(12.dp))
-                Text(
-                    "Eva uses this for birthday wishes and to confirm you are 18 or older.",
-                    color = evaMuted()
-                )
-                Spacer(Modifier.height(12.dp))
-                Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                    EvaTextField(
-                        value = day,
-                        onValueChange = { day = it.filter(Char::isDigit).take(2) },
-                        label = "DD",
-                        keyboardType = KeyboardType.Number,
-                        imeAction = ImeAction.Next,
-                        modifier = Modifier.weight(1f)
-                    )
-                    EvaTextField(
-                        value = month,
-                        onValueChange = { month = it.filter(Char::isDigit).take(2) },
-                        label = "MM",
-                        keyboardType = KeyboardType.Number,
-                        imeAction = ImeAction.Next,
-                        modifier = Modifier.weight(1f)
-                    )
-                    EvaTextField(
-                        value = year,
-                        onValueChange = { year = it.filter(Char::isDigit).take(4) },
-                        label = "YYYY",
-                        keyboardType = KeyboardType.Number,
-                        imeAction = ImeAction.Done,
-                        modifier = Modifier.weight(1.4f)
-                    )
-                }
-                error?.let {
-                    Spacer(Modifier.height(8.dp))
-                    Text(it, color = EvaColors.Coral)
-                }
-            }
-        },
-        confirmButton = {
-            TextButton(enabled = !busy, onClick = {
-                val iso = validatedIso()
-                if (iso == null) {
-                    error = "Enter a valid date of birth."
-                } else {
-                    onSave(iso, preferredName.trim())
-                }
-            }) { Text(if (busy) "Saving..." else "Continue") }
-        },
-        dismissButton = {
-            TextButton(onClick = onSkip) { Text("Later") }
-        }
-    )
-}

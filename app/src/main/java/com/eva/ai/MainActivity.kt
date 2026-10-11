@@ -19,6 +19,10 @@ import com.eva.ai.data.billing.normalizeBillingPhone
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.setValue
+import com.eva.ai.presentation.premium.ManualPhoneDialog
 import androidx.compose.ui.graphics.toArgb
 import androidx.credentials.CredentialManager
 import androidx.credentials.CustomCredential
@@ -35,6 +39,7 @@ import com.eva.ai.presentation.EvaAppController
 import com.eva.ai.presentation.acceptAuthRedirect
 import com.eva.ai.presentation.openConversationFromNotification
 import com.eva.ai.presentation.refreshSubscription
+import com.eva.ai.presentation.restoreBillingState
 import com.eva.ai.presentation.signInWithGoogle
 import com.eva.ai.presentation.googleSignInUri
 import com.eva.ai.presentation.BillingOperation
@@ -76,6 +81,7 @@ class MainActivity : ComponentActivity(), PaymentResultWithDataListener {
     private var pendingRazorpayChoice: RazorpayChoice? = null
     private var phoneHintChoice: RazorpayChoice? = null
     private var phoneHintTicket: Long? = null
+    private var manualPhoneChoice by mutableStateOf<RazorpayChoice?>(null)
     private val phoneHintLauncher = registerForActivityResult(ActivityResultContracts.StartIntentSenderForResult()) { result ->
         val phone = if (result.resultCode == RESULT_OK && result.data != null) runCatching {
             Identity.getSignInClient(this).getPhoneNumberFromIntent(result.data!!)
@@ -139,9 +145,13 @@ class MainActivity : ComponentActivity(), PaymentResultWithDataListener {
                     ?.takeIf { it in IndiaBillingPolicy.administrativeAreas }
                 if (pendingRazorpayChoice?.owner != owner) {
                     pendingRazorpayChoice = null
+                    manualPhoneChoice = null
                     controller.razorpayBillingStateRequired = false
                 }
-                if (owner != null) playBilling.restorePurchases()
+                if (owner != null) {
+                    playBilling.restorePurchases()
+                    controller.restoreBillingState(owner)
+                }
             }
             LaunchedEffect(controller.billingAdministrativeArea, controller.razorpayBillingStateRequired) {
                 if (controller.razorpayBillingStateRequired && controller.billingAdministrativeArea != null && !controller.subscriptionBusy) {
@@ -207,6 +217,26 @@ class MainActivity : ComponentActivity(), PaymentResultWithDataListener {
                     }
                 }
             )
+            manualPhoneChoice?.let { choice ->
+                androidx.compose.runtime.key(choice.owner, choice.token) {
+                    val light = controller.lightMode ?: !androidx.compose.foundation.isSystemInDarkTheme()
+                    com.eva.ai.ui.theme.AICompanionTheme(darkTheme = !light, dynamicColor = false) {
+                    androidx.compose.runtime.CompositionLocalProvider(com.eva.ai.presentation.components.LocalEvaLightMode provides light) {
+                    ManualPhoneDialog(onDismiss = {
+                        manualPhoneChoice = null
+                        if (pendingRazorpayChoice == choice) pendingRazorpayChoice = null
+                    }, onContinue = { phone ->
+                        if (pendingRazorpayChoice == choice && choice.owner == (controller.authState as? AuthState.SignedIn)?.user?.id) {
+                            val state = controller.billingAdministrativeArea
+                            manualPhoneChoice = null
+                            pendingRazorpayChoice = null
+                            if (state != null) openRazorpaySubscription(choice.token, state, phone)
+                        }
+                    })
+                    }
+                    }
+                }
+            }
         }
     }
 
@@ -260,7 +290,7 @@ class MainActivity : ComponentActivity(), PaymentResultWithDataListener {
 
     private fun requestBillingPhoneHint() {
         val choice = pendingRazorpayChoice ?: return
-        if (phoneHintTicket != null || choice.owner != (controller.authState as? AuthState.SignedIn)?.user?.id) return
+        if (phoneHintTicket != null || manualPhoneChoice != null || choice.owner != (controller.authState as? AuthState.SignedIn)?.user?.id) return
         val state = controller.billingAdministrativeArea ?: return
         if (state !in IndiaBillingPolicy.administrativeAreas) return
         controller.razorpayBillingStateRequired = false
@@ -287,10 +317,15 @@ class MainActivity : ComponentActivity(), PaymentResultWithDataListener {
         val choice = phoneHintChoice ?: return
         phoneHintChoice = null
         if (pendingRazorpayChoice != choice) return
-        pendingRazorpayChoice = null
         val state = controller.billingAdministrativeArea ?: return
         if (choice.owner != (controller.authState as? AuthState.SignedIn)?.user?.id) return
-        openRazorpaySubscription(choice.token, state, normalizeBillingPhone(phone))
+        val normalized = normalizeBillingPhone(phone)
+        if (normalized == null) {
+            manualPhoneChoice = choice
+            return
+        }
+        pendingRazorpayChoice = null
+        openRazorpaySubscription(choice.token, state, normalized)
     }
 
     private fun openRazorpaySubscription(externalTransactionToken: String, billingAdministrativeArea: String, phone: String? = null) {

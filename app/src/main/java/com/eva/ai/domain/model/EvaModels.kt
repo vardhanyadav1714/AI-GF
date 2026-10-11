@@ -56,7 +56,8 @@ data class SendMessageResult(
     val assistantText: String,
     val freeUsed: Int = 0,
     val freeLimit: Int = 10,
-    val freeRemaining: Int? = null
+    val freeRemaining: Int? = null,
+    val assistantMessageId: String = ""
 )
 
 data class VoiceSendResult(

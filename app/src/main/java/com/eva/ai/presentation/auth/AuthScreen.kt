@@ -319,7 +319,7 @@ fun AuthModeToggle(
             ) {
                 Text(
                     text = if (item == AuthMode.Login) "Sign in" else "Sign up",
-                    color = if (selected) Color.White else evaMuted(),
+                    color = if (selected) EvaColors.Ink else evaMuted(),
                     fontWeight = FontWeight.Bold,
                     fontSize = 14.sp
                 )

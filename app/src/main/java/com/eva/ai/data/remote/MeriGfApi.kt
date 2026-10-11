@@ -60,6 +60,7 @@ class MeriGfApi @Inject constructor(
     }
 
     fun clearSession() {
+        androidx.work.WorkManager.getInstance(context).cancelAllWorkByTag("eva-notification-replies")
         prefs.edit().clear().apply()
     }
 
@@ -135,15 +136,40 @@ class MeriGfApi @Inject constructor(
         displayName: String?,
         preferredName: String?,
         occupation: String?,
-        dateOfBirth: String? = null
+        dateOfBirth: String? = null,
+        currentPlaceId: String? = null,
+        useLocationForBilling: Boolean = false
     ): EvaUser {
         val body = JSONObject()
         displayName?.takeIf { it.isNotBlank() }?.let { body.put("displayName", it.trim()) }
         preferredName?.let { body.put("preferredName", it.trim()) }
         occupation?.let { body.put("occupation", it.trim()) }
         dateOfBirth?.takeIf { it.isNotBlank() }?.let { body.put("dateOfBirth", it) }
+        currentPlaceId?.let { body.put("currentPlaceId", it).put("useLocationForBilling", useLocationForBilling) }
         val data = requestObject(method = "PUT", path = "/profile", body = body)
         return parseUser(data).also(::saveUser)
+    }
+
+    suspend fun searchPlaces(query: String): List<com.eva.ai.domain.model.PlaceSuggestion> {
+        val data = requestObject(method = "GET", path = "/places?q=${java.net.URLEncoder.encode(query, "UTF-8")}")
+        val places = data.optJSONArray("places") ?: return emptyList()
+        return (0 until places.length()).map { index ->
+            val place = places.getJSONObject(index)
+            com.eva.ai.domain.model.PlaceSuggestion(place.getString("id"), place.getString("label"),
+                place.getString("countryCode"), place.optString("billingAdministrativeArea").takeIf { it.isNotBlank() && it != "null" })
+        }
+    }
+
+    suspend fun billingState(): String? {
+        val data = requestObject(method = "GET", path = "/profile/billing-address")
+        return if (data.optString("billingCountryCode") == "IN")
+            data.optString("billingAdministrativeArea").takeIf { it.isNotBlank() && it != "null" }
+        else null
+    }
+
+    suspend fun saveBillingState(state: String) {
+        requestObject(method = "PUT", path = "/profile/billing-address", body = JSONObject()
+            .put("billingCountryCode", "IN").put("billingAdministrativeArea", state))
     }
 
     suspend fun subscriptionStatus(sync: Boolean = false): SubscriptionState {
@@ -274,7 +300,8 @@ class MeriGfApi @Inject constructor(
         conversationId: String?,
         content: String,
         companion: CompanionProfile,
-        replyStyle: ReplyStyle
+        replyStyle: ReplyStyle,
+        requestId: String? = null
     ): SendMessageResult {
         val id = conversationId ?: createConversation(companion, replyStyle)
         val data = requestObject(
@@ -282,6 +309,7 @@ class MeriGfApi @Inject constructor(
             path = "/conversations/${id.urlPath()}/messages",
             body = JSONObject()
                 .put("role", "user")
+                .put("requestId", requestId)
                 .put("content", content)
                 .put("companionId", companion.id)
                 .put("personalityMode", replyStyle.id)
@@ -302,7 +330,8 @@ class MeriGfApi @Inject constructor(
             assistantText = reply,
             freeUsed = usage.first,
             freeLimit = usage.second,
-            freeRemaining = usage.third
+            freeRemaining = usage.third,
+            assistantMessageId = data.optJSONObject("assistantMessage")?.optString("id").orEmpty()
         )
     }
 
@@ -419,9 +448,9 @@ class MeriGfApi @Inject constructor(
             name = json.bestString("name", "displayName", default = fallbackName),
             email = email,
             avatarUrl = json.optString("avatarUrl", "").ifBlank { null },
-            dateOfBirth = json.optString("dateOfBirth", "").ifBlank { null },
-            preferredName = json.optString("preferredName", "").ifBlank { null },
-            occupation = json.optString("occupation", "").ifBlank { null }
+            dateOfBirth = json.takeUnless { it.isNull("dateOfBirth") }?.optString("dateOfBirth")?.takeIf { it.isNotBlank() },
+            preferredName = json.takeUnless { it.isNull("preferredName") }?.optString("preferredName")?.takeIf { it.isNotBlank() },
+            occupation = json.takeUnless { it.isNull("occupation") }?.optString("occupation")?.takeIf { it.isNotBlank() }
         )
     }
 
@@ -492,6 +521,7 @@ class MeriGfApi @Inject constructor(
             body = JSONObject()
                 .put("token", token)
                 .put("platform", "android")
+                .put("supportsNotificationActions", true)
         )
         true
     }.getOrDefault(false)

@@ -69,6 +69,7 @@ extensions.configure<ApplicationExtension>("android") {
 }
 
 dependencies {
+    implementation("androidx.media3:media3-exoplayer:1.11.1")
     implementation(platform(libs.androidx.compose.bom))
     implementation(platform(libs.firebase.bom))
     implementation(libs.androidx.activity.compose)
@@ -81,6 +82,7 @@ dependencies {
     implementation(libs.androidx.credentials)
     implementation(libs.androidx.credentials.play.services.auth)
     implementation(libs.androidx.lifecycle.runtime.ktx)
+    implementation("androidx.work:work-runtime-ktx:2.11.2")
     implementation(libs.firebase.messaging)
     implementation(libs.googleid)
     implementation("com.google.android.gms:play-services-auth:22.0.0")

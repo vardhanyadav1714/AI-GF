@@ -2,11 +2,9 @@ package com.eva.ai.data.audio
 
 import android.content.Context
 import android.content.Intent
-import android.media.MediaPlayer
 import android.media.MediaRecorder
 import android.net.Uri
 import android.os.Build
-import android.util.Base64
 import java.io.File
 
 class EvaAudioRecorder(private val context: Context) {
@@ -16,7 +14,10 @@ class EvaAudioRecorder(private val context: Context) {
     fun start() {
         cancel()
         val file = File.createTempFile("eva-voice-", ".m4a", context.cacheDir)
-        val nextRecorder = createMediaRecorder(context).apply {
+        outputFile = file
+        val nextRecorder = createMediaRecorder(context)
+        recorder = nextRecorder
+        try { nextRecorder.apply {
             setAudioSource(MediaRecorder.AudioSource.MIC)
             setOutputFormat(MediaRecorder.OutputFormat.MPEG_4)
             setAudioEncoder(MediaRecorder.AudioEncoder.AAC)
@@ -25,9 +26,7 @@ class EvaAudioRecorder(private val context: Context) {
             setOutputFile(file.absolutePath)
             prepare()
             start()
-        }
-        outputFile = file
-        recorder = nextRecorder
+        } } catch (error: Exception) { cancel(); throw error }
     }
 
     fun stop(): ByteArray {
@@ -43,16 +42,16 @@ class EvaAudioRecorder(private val context: Context) {
         } finally {
             activeRecorder.release()
         }
-        val bytes = file.readBytes()
-        file.delete()
-        return bytes
+        return try { file.readBytes() } finally { file.delete() }
     }
+
+    fun level(): Float = (runCatching { recorder?.maxAmplitude ?: 0 }.getOrDefault(0) / 32767f).coerceIn(0f, 1f)
 
     fun cancel() {
         val activeRecorder = recorder
         recorder = null
         runCatching { activeRecorder?.stop() }
-        activeRecorder?.release()
+        runCatching { activeRecorder?.release() }
         outputFile?.delete()
         outputFile = null
     }
@@ -73,39 +72,6 @@ fun openExternalUrl(context: Context, url: String, onFailure: () -> Unit) {
         context.startActivity(Intent(Intent.ACTION_VIEW, Uri.parse(url)))
     }.onFailure {
         onFailure()
-    }
-}
-
-fun playBase64Audio(context: Context, base64Audio: String, mimeType: String) {
-    if (base64Audio.isBlank()) return
-    runCatching {
-        playAudioBytes(context, Base64.decode(base64Audio, Base64.DEFAULT), mimeType)
-    }
-}
-
-fun playAudioBytes(context: Context, audioBytes: ByteArray, mimeType: String) {
-    if (audioBytes.isEmpty()) return
-    runCatching {
-        val file = File.createTempFile(
-            "eva-reply-",
-            ".${audioExtensionForMime(mimeType)}",
-            context.cacheDir
-        )
-        file.writeBytes(audioBytes)
-        MediaPlayer().apply {
-            setDataSource(file.absolutePath)
-            setOnPreparedListener { player -> player.start() }
-            setOnCompletionListener { player ->
-                player.release()
-                file.delete()
-            }
-            setOnErrorListener { player, _, _ ->
-                player.release()
-                file.delete()
-                true
-            }
-            prepareAsync()
-        }
     }
 }
 

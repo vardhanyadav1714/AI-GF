@@ -3,7 +3,6 @@ package com.eva.ai.presentation
 import android.util.Base64
 import com.eva.ai.data.remote.ApiException
 import com.eva.ai.domain.logic.cleanMessage
-import com.eva.ai.domain.logic.estimateSpeechSeconds
 import com.eva.ai.domain.model.AuthState
 import com.eva.ai.domain.model.ChatMessage
 import com.eva.ai.domain.model.CompanionProfile
@@ -205,6 +204,8 @@ suspend fun EvaAppController.sendVoiceNote(
     )
     val userIndex = messages.lastIndex - 1
     val placeholderIndex = messages.lastIndex
+    val voiceUserId = messages[userIndex].id
+    val voicePlaceholderId = messages[placeholderIndex].id
     val liveResult = if (api.savedAccessToken().isNullOrBlank()) {
         Result.failure(IllegalStateException("No signed-in backend session."))
     } else {
@@ -221,6 +222,9 @@ suspend fun EvaAppController.sendVoiceNote(
 
     var playback: VoiceSendResult? = null
     liveResult.onSuccess { result ->
+        val userIndex = messages.indexOfFirst { it.id == voiceUserId }
+        val placeholderIndex = messages.indexOfFirst { it.id == voicePlaceholderId }
+        if (userIndex < 0 || placeholderIndex < 0) return@onSuccess
         backendLive = true
         selectedConversationId = result.conversationId
         applyUsage(result.freeRemaining)
@@ -239,7 +243,7 @@ suspend fun EvaAppController.sendVoiceNote(
                 messages[placeholderIndex].copy(
                     text = assistantText,
                     kind = MessageKind.Voice,
-                    voiceSeconds = estimateSpeechSeconds(assistantText),
+                    voiceSeconds = 0,
                     audioBase64 = result.audioBase64,
                     audioMimeType = result.audioMimeType,
                     streaming = false
@@ -253,12 +257,16 @@ suspend fun EvaAppController.sendVoiceNote(
         }
         playback = result
     }.onFailure { error ->
+        val userIndex = messages.indexOfFirst { it.id == voiceUserId }
+        val placeholderIndex = messages.indexOfFirst { it.id == voicePlaceholderId }
+        if (userIndex < 0 || placeholderIndex < 0) return@onFailure
         if (error is ApiException && error.statusCode == 402) {
             handleMessageLimitReached(userIndex, placeholderIndex)
         } else {
             backendLive = false
             notice = error.cleanMessage("Voice message could not be sent.")
             if (placeholderIndex in messages.indices) messages.removeAt(placeholderIndex)
+            if (userIndex in messages.indices) messages.removeAt(userIndex)
         }
     }
     sending = false

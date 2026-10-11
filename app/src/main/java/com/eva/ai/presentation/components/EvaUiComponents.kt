@@ -120,7 +120,7 @@ object EvaColors {
     val Gold = com.eva.ai.ui.theme.EvaGold
     val Green = com.eva.ai.ui.theme.EvaGreen
     val Danger = com.eva.ai.ui.theme.EvaDanger
-    val Action = Color(0xFFB72C50)
+    val Action = Pink
     val Ink = EvaInk
     val InkHigh = EvaInkHigh
     val Gradient = Brush.linearGradient(listOf(Purple, Pink, Coral))
@@ -230,9 +230,9 @@ fun PrimaryButton(
         onClick = { hapticTick(); onClick() }, enabled = enabled && !busy,
         modifier = Modifier.fillMaxWidth().heightIn(min = 56.dp),
         shape = RoundedCornerShape(8.dp),
-        colors = ButtonDefaults.buttonColors(containerColor = EvaColors.Action, contentColor = Color.White,
+        colors = ButtonDefaults.buttonColors(containerColor = EvaColors.Action, contentColor = EvaColors.Ink,
             disabledContainerColor = if (busy) EvaColors.Action else evaGlass(),
-            disabledContentColor = if (busy) Color.White else evaMuted()),
+            disabledContentColor = if (busy) EvaColors.Ink else evaMuted()),
         contentPadding = PaddingValues(horizontal = 20.dp, vertical = 14.dp)
     ) {
         Box(Modifier.size(20.dp), contentAlignment = Alignment.Center) {
@@ -721,7 +721,8 @@ fun EvaTextField(
     keyboardType: KeyboardType = KeyboardType.Text,
     imeAction: ImeAction,
     onSend: (() -> Unit)? = null,
-    modifier: Modifier = Modifier
+    modifier: Modifier = Modifier,
+    enabled: Boolean = true
 ) {
     val bringIntoViewRequester = remember { BringIntoViewRequester() }
     val scope = rememberCoroutineScope()
@@ -729,6 +730,7 @@ fun EvaTextField(
     OutlinedTextField(
         value = value,
         onValueChange = onValueChange,
+        enabled = enabled,
         label = { Text(label) },
         singleLine = true,
         modifier = Modifier
