@@ -77,11 +77,8 @@ suspend fun EvaAppController.acceptAuthRedirect(uri: Uri) {
     }
 
     runCatching {
-        val accessToken = uri.getQueryParameter("accessToken")
-        val refreshToken = uri.getQueryParameter("refreshToken")
         val code = uri.getQueryParameter("code")
         when {
-            !accessToken.isNullOrBlank() -> api.saveRedirectSession(accessToken, refreshToken)
             !code.isNullOrBlank() -> api.exchangeGoogleCode(code)
             else -> throw ApiException("Google sign-in did not return a session.")
         }

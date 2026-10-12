@@ -39,6 +39,10 @@ internal class SecureSessionTokens(private val prefs: SharedPreferences) {
         check(editor.commit()) { "Could not securely save your session. Please try signing in again." }
     }
 
+    fun saveOAuthVerifier(verifier: String) = synchronized(lock) {
+        writeValue("oauth_verifier", verifier)
+    }
+
     private fun writeValue(name: String, value: String) {
         check(prefs.edit().putString(name, encrypt(name, value)).commit())
     }

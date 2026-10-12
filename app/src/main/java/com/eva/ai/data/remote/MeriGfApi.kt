@@ -69,30 +69,28 @@ class MeriGfApi @Inject constructor(
     }
 
     fun googleSignInUri(): Uri {
+        val verifier = OAuthPkce.newVerifier()
+        tokens.saveOAuthVerifier(verifier)
+        check(prefs.edit().putLong("oauth_started_at", System.currentTimeMillis()).commit())
         val redirectUri = "ai-companion://auth/google"
         val encodedRedirect = URLEncoder.encode(redirectUri, Charsets.UTF_8.name())
-        return Uri.parse("$baseUrl/auth/google/start?redirectUri=$encodedRedirect")
+        return Uri.parse("$baseUrl/auth/google/start?redirectUri=$encodedRedirect&codeChallenge=${OAuthPkce.challenge(verifier)}")
     }
 
     suspend fun exchangeGoogleCode(code: String): AuthSession {
+        val startedAt = prefs.getLong("oauth_started_at", 0)
+        val verifier = tokens.read("oauth_verifier")
+        if (verifier.isNullOrBlank() || System.currentTimeMillis() - startedAt !in 0..600_000) {
+            throw ApiException("Please restart Google sign-in from this app.")
+        }
         val data = requestObject(
             method = "POST",
             path = "/auth/google/mobile/exchange",
-            body = JSONObject().put("code", code),
+            body = JSONObject().put("code", code).put("codeVerifier", verifier),
             authorized = false
         )
+        prefs.edit().remove("oauth_verifier").remove("oauth_started_at").commit()
         return saveSession(data)
-    }
-
-    suspend fun saveRedirectSession(accessToken: String, refreshToken: String?): AuthSession {
-        tokens.save(accessToken, refreshToken)
-
-        val user = runCatching { me() }
-            .getOrElse {
-                EvaUser(id = "google-user", name = "Vardhan", email = "")
-            }
-        saveUser(user)
-        return AuthSession(accessToken, refreshToken, user)
     }
 
     suspend fun requestEmailCode(name: String, email: String) {
