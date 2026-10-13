@@ -55,7 +55,8 @@ fun CustomCompanionScreen(controller: EvaAppController, scope: CoroutineScope) {
                 }
             }
             Text("Portrait", color = evaText(), fontWeight = FontWeight.SemiBold)
-            companionProfiles.chunked(3).forEach { row ->
+            Column(Modifier.heightIn(max = 320.dp).verticalScroll(rememberScrollState()), verticalArrangement = Arrangement.spacedBy(12.dp)) {
+            companionPortraits.chunked(3).forEach { row ->
                 Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
                     row.forEach { avatar ->
                         Column(Modifier.weight(1f), horizontalAlignment = Alignment.CenterHorizontally) {
@@ -69,6 +70,7 @@ fun CustomCompanionScreen(controller: EvaAppController, scope: CoroutineScope) {
                         }
                     }
                 }
+            }
             }
             OutlinedTextField(form.name, { if (it.length <= 40) form = form.copy(name = it) }, label = { Text("Name") },
                 singleLine = true, enabled = !busy, modifier = Modifier.fillMaxWidth(), colors = fieldColors)
