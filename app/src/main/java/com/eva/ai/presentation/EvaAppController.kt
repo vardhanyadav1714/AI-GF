@@ -65,6 +65,41 @@ class EvaAppController @Inject constructor(
 
     val messages = mutableStateListOf<ChatMessage>()
     val conversations = mutableStateListOf<ConversationPreview>()
+    val customCompanions = mutableStateListOf<com.eva.ai.domain.model.CustomCompanion>()
+    var companionEditorOpen by mutableStateOf(false)
+    var editingCompanionId by mutableStateOf<String?>(null)
+    var companionSaveBusy by mutableStateOf(false)
+    var companionSaveError by mutableStateOf<String?>(null)
+
+    internal fun companionProfile(id: String): CompanionProfile {
+        if (!id.startsWith("custom_")) return com.eva.ai.domain.model.companionById(id)
+        return customCompanions.firstOrNull { it.id == id }?.profile()
+            ?: throw ApiException("Could not load this companion. Please try again.")
+    }
+
+    fun openCompanionEditor(id: String? = null) {
+        editingCompanionId = id
+        companionSaveError = null
+        companionEditorOpen = true
+    }
+
+    suspend fun saveCompanion(character: com.eva.ai.domain.model.CustomCompanion): Boolean {
+        if (companionSaveBusy) return false
+        companionSaveBusy = true
+        companionSaveError = null
+        val owner = (authState as? AuthState.SignedIn)?.user?.id
+        val saved = runCatching { api.saveCustomCompanion(character) }.onSuccess { updated ->
+            if ((authState as? AuthState.SignedIn)?.user?.id != owner) return@onSuccess
+            customCompanions.removeAll { it.id == updated.id }
+            customCompanions.add(updated)
+            if (!updated.archived) selectCompanion(updated.profile())
+            else if (selectedCompanion.id == updated.id) selectCompanion(com.eva.ai.domain.model.companionById("eva"))
+            companionEditorOpen = false
+            notice = if (updated.archived) "Companion archived. Chat history is kept." else "Companion saved."
+        }.onFailure { companionSaveError = it.cleanMessage("Could not save companion.") }.isSuccess
+        companionSaveBusy = false
+        return saved
+    }
 
     suspend fun bootstrap() {
         authState = AuthState.Loading

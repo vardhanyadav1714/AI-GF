@@ -31,23 +31,24 @@ class NotificationActionReceiver : BroadcastReceiver() {
         if (MeriGfApi(context).savedUser()?.id != user) return
         val text = notificationReplyText(RemoteInput.getResultsFromIntent(intent)?.getCharSequence(KEY_REPLY)) ?: return
         val companion = intent.getStringExtra("companionId") ?: return
+        val companionName = intent.getStringExtra("companionName") ?: "Eva"
         val work = OneTimeWorkRequestBuilder<NotificationReplyWorker>()
             .setConstraints(Constraints.Builder().setRequiredNetworkType(NetworkType.CONNECTED).build())
             .setInputData(workDataOf("conversationId" to conversation, "recipientUserId" to user,
-                "companionId" to companion, "content" to text, "notificationId" to notificationId))
+                "companionId" to companion, "companionName" to companionName, "content" to text, "notificationId" to notificationId))
             .addTag("eva-notification-replies")
             .build()
         val pending = goAsync()
         val appContext = context.applicationContext
         CoroutineScope(Dispatchers.IO).launch {
             try {
-                EvaNotificationCenter.showCompanionMessage(appContext, companionById(companion).name, "Sending your reply...", conversation,
+                EvaNotificationCenter.showCompanionMessage(appContext, companionName, "Sending your reply...", conversation,
                     companion, user, notificationId = notificationId, allowReply = false)
                 WorkManager.getInstance(appContext).enqueueUniqueWork("eva-reply-$user-$notificationId", ExistingWorkPolicy.KEEP, work)
                     .result.get(8, TimeUnit.SECONDS)
             } catch (_: Exception) {
                 if (MeriGfApi(appContext).savedUser()?.id == user) {
-                    EvaNotificationCenter.showCompanionMessage(appContext, companionById(companion).name,
+                    EvaNotificationCenter.showCompanionMessage(appContext, companionName,
                         "Open chat to check whether your reply was sent.", conversation, companion, user,
                         notificationId = notificationId, allowReply = false)
                 }

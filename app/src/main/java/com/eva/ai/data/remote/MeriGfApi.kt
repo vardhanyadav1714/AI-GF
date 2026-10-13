@@ -10,6 +10,7 @@ import com.eva.ai.R
 import com.eva.ai.domain.model.AuthSession
 import com.eva.ai.domain.model.ChatMessage
 import com.eva.ai.domain.model.CompanionProfile
+import com.eva.ai.domain.model.CustomCompanion
 import com.eva.ai.domain.model.ConversationPreview
 import com.eva.ai.domain.model.EvaUser
 import com.eva.ai.domain.model.MessageKind
@@ -230,6 +231,30 @@ class MeriGfApi @Inject constructor(
                 .put("productId", productId)
         )
         return parseSubscriptionState(data.optJSONObject("subscription") ?: data, data.optJSONObject("usage"))
+    }
+
+    suspend fun customCompanions(): List<CustomCompanion> {
+        val array = requestJson("GET", "/companions") as? JSONArray ?: throw ApiException("Could not load companions.")
+        return (0 until array.length()).map { parseCustomCompanion(array.getJSONObject(it)) }
+    }
+
+    suspend fun saveCustomCompanion(character: CustomCompanion): CustomCompanion {
+        val body = JSONObject().put("name", character.name.trim()).put("age", character.age)
+            .put("avatarId", character.avatarId).put("traits", JSONArray(character.traits))
+            .put("interests", character.interests.trim()).put("backstory", character.backstory.trim())
+            .put("language", character.language).put("conversationStyle", character.conversationStyle)
+        if (character.id.isNotBlank()) body.put("archived", character.archived)
+        return parseCustomCompanion(requestObject(if (character.id.isBlank()) "POST" else "PATCH",
+            if (character.id.isBlank()) "/companions" else "/companions/${character.id.urlPath()}", body))
+    }
+
+    private fun parseCustomCompanion(data: JSONObject): CustomCompanion {
+        val traits = data.optJSONArray("traits") ?: JSONArray()
+        return CustomCompanion(id = data.getString("id"), name = data.getString("name"), age = data.getInt("age"),
+            avatarId = data.getString("avatarId"), traits = (0 until traits.length()).map { traits.getString(it) },
+            interests = data.optString("interests"), backstory = data.optString("backstory"),
+            language = data.optString("language", "Automatic"), conversationStyle = data.optString("conversationStyle", "natural"),
+            archived = data.optBoolean("archived"))
     }
 
     suspend fun conversations(): List<ConversationPreview> {

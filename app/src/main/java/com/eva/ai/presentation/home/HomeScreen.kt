@@ -92,7 +92,10 @@ fun HomeScreen(
     onCompanionSelect: (CompanionProfile) -> Unit,
     onChat: () -> Unit,
     onPremium: () -> Unit,
-    onQuickMessage: (String) -> Unit
+    onQuickMessage: (String) -> Unit,
+    catalog: List<CompanionProfile> = companionProfiles,
+    onCreateCompanion: () -> Unit = {},
+    onEditCompanion: () -> Unit = {}
 ) {
     val hapticTick = rememberEvaHaptic()
 
@@ -163,11 +166,24 @@ fun HomeScreen(
             item {
                 HomeCompanionRail(
                     selected = companion,
+                    catalog = catalog,
                     onSelect = { profile ->
                         hapticTick()
                         onCompanionSelect(profile)
                     }
                 )
+            }
+            item {
+                Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+                    OutlinedButton(onClick = onCreateCompanion, colors = ButtonDefaults.outlinedButtonColors(contentColor = EvaColors.Pink)) {
+                        Icon(Icons.Rounded.Add, contentDescription = null)
+                        Spacer(Modifier.width(6.dp))
+                        Text("Create companion")
+                    }
+                    if (companion.id.startsWith("custom_")) IconButton(onClick = onEditCompanion) {
+                        Icon(Icons.Rounded.Edit, contentDescription = "Edit companion", tint = EvaColors.Pink)
+                    }
+                }
             }
             item {
                 HeroImageCard(companion, onChat)
@@ -193,7 +209,8 @@ fun HomeScreen(
 @Composable
 fun HomeCompanionRail(
     selected: CompanionProfile,
-    onSelect: (CompanionProfile) -> Unit
+    onSelect: (CompanionProfile) -> Unit,
+    catalog: List<CompanionProfile> = companionProfiles
 ) {
     Column {
         Row(verticalAlignment = Alignment.CenterVertically) {
@@ -224,7 +241,7 @@ fun HomeCompanionRail(
             horizontalArrangement = Arrangement.spacedBy(10.dp),
             contentPadding = PaddingValues(end = 4.dp)
         ) {
-            items(companionProfiles, key = { it.id }) { profile ->
+            items(catalog, key = { it.id }) { profile ->
                 HomeCompanionCard(
                     profile = profile,
                     selected = selected.id == profile.id,

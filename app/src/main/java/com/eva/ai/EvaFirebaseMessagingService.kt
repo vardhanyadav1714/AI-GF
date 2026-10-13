@@ -173,6 +173,7 @@ object EvaNotificationCenter {
                 putExtra("conversationId", conversationId)
                 putExtra("notificationId", notificationId)
                 putExtra("companionId", companionId)
+                putExtra("companionName", title)
                 putExtra("recipientUserId", recipientUserId)
             }
             if (allowReply && companionId != null && recipientUserId != null) {

@@ -230,6 +230,7 @@ fun EvaShell(
             label = "eva-shell"
         ) { state ->
             when {
+                controller.companionEditorOpen -> CustomCompanionScreen(controller, scope)
                 state.premiumOpen -> PremiumScreen(
                     subscription = controller.subscriptionState,
                     busy = controller.subscriptionBusy,
@@ -260,6 +261,9 @@ fun EvaShell(
                     user = user,
                     companion = controller.selectedCompanion,
                     onCompanionSelect = controller::selectCompanion,
+                    catalog = companionProfiles + controller.customCompanions.filter { !it.archived }.map { it.profile() },
+                    onCreateCompanion = { controller.openCompanionEditor() },
+                    onEditCompanion = { controller.openCompanionEditor(controller.selectedCompanion.id) },
                     onChat = { controller.activeTab = EvaTab.Chat },
                     onPremium = { controller.premiumOpen = true },
                     onQuickMessage = { text ->
@@ -285,7 +289,7 @@ fun EvaShell(
 
         AnimatedVisibility(
             visible = !controller.premiumOpen &&
-                controller.activeTab != EvaTab.Chat && !profileEditorOpen,
+                controller.activeTab != EvaTab.Chat && !profileEditorOpen && !controller.companionEditorOpen,
             modifier = Modifier.align(Alignment.BottomCenter)
         ) {
             EvaBottomNav(

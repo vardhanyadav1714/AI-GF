@@ -17,13 +17,17 @@ import kotlin.math.max
 suspend fun EvaAppController.loadChats() {
     chatsLoading = true
     runCatching {
+        runCatching { api.customCompanions() }.onSuccess { records ->
+            customCompanions.clear()
+            customCompanions.addAll(records)
+        }
         val previews = api.conversations()
         conversations.clear()
         conversations.addAll(previews)
         val first = previews.firstOrNull()
         selectedConversationId = first?.id
         if (first != null) {
-            selectedCompanion = companionById(first.companionId)
+            selectedCompanion = companionProfile(first.companionId)
             persistSelectedCompanion()
             val loadedMessages = api.messages(first.id)
             messages.clear()
@@ -49,7 +53,10 @@ suspend fun EvaAppController.openConversation(conversationId: String) {
     activeTab = EvaTab.Chat
     premiumOpen = false
     conversations.firstOrNull { it.id == conversationId }?.let { preview ->
-        selectedCompanion = companionById(preview.companionId)
+        selectedCompanion = runCatching { companionProfile(preview.companionId) }.getOrElse {
+            notice = "Could not load this companion. Please reload your chats."
+            return
+        }
         persistSelectedCompanion()
     }
     selectedConversationId = conversationId
@@ -81,7 +88,11 @@ suspend fun EvaAppController.reloadCurrentConversation() {
 // ── Companion selection ──────────────────────────────────────────────────────
 
 fun EvaAppController.selectCompanion(profile: CompanionProfile) {
-    if (selectedCompanion.id == profile.id) return
+    if (selectedCompanion.id == profile.id) {
+        selectedCompanion = profile
+        persistSelectedCompanion()
+        return
+    }
     selectedCompanion = profile
     persistSelectedCompanion()
     selectedConversationId = null

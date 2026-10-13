@@ -23,11 +23,13 @@ class NotificationReplyWorker(context: Context, params: WorkerParameters) : Coro
             return Result.failure()
         }
         try {
-            val result = api.sendMessage(conversation, content, companionById(companion), replyStyleById("natural"), requestId = id.toString())
+            val profile = if (companion.startsWith("custom_")) api.customCompanions().firstOrNull { it.id == companion && !it.archived }?.profile()
+                ?: throw ApiException("Companion not found or archived.", 404) else companionById(companion)
+            val result = api.sendMessage(conversation, content, profile, replyStyleById("natural"), requestId = id.toString())
             if (api.savedUser()?.id != user) return Result.failure()
             NotificationManagerCompat.from(applicationContext).cancel(originalId)
             if (!EvaNotificationCenter.tryDeliverToOpenConversation(conversation)) {
-                EvaNotificationCenter.showCompanionMessage(applicationContext, companionById(companion).name,
+                EvaNotificationCenter.showCompanionMessage(applicationContext, profile.name,
                     result.assistantText, conversation, companion, user, result.assistantMessageId)
             }
             return Result.success()
@@ -39,9 +41,10 @@ class NotificationReplyWorker(context: Context, params: WorkerParameters) : Coro
                 val message = when (status) {
                     402 -> "Your free messages are used. Open Eva to continue with Premium."
                     401 -> "Open Eva to sign in before replying."
+                    404 -> "This companion is unavailable or archived. Open Eva to restore it."
                     else -> "Reply could not be confirmed. Open chat before sending again."
                 }
-                EvaNotificationCenter.showCompanionMessage(applicationContext, companionById(companion).name, message,
+                EvaNotificationCenter.showCompanionMessage(applicationContext, inputData.getString("companionName") ?: "Eva", message,
                     conversation, companion, user, notificationId = originalId, allowReply = false)
             }
             return Result.failure()

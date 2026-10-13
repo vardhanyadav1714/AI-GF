@@ -103,6 +103,11 @@ suspend fun EvaAppController.signOut() {
     needsDateOfBirth = false
     messages.clear()
     conversations.clear()
+    customCompanions.clear()
+    companionEditorOpen = false
+    editingCompanionId = null
+    selectedCompanion = com.eva.ai.domain.model.companionById("eva")
+    persistSelectedCompanion()
     subscriptionState = null
     freeMessagesRemaining = null
     billingAdministrativeArea = null
