@@ -166,14 +166,14 @@ class EvaAppController @Inject constructor(
         if (userIndex in messages.indices) messages.removeAt(userIndex)
         backendLive = true
         freeMessagesRemaining = 0
-        notice = "Your 10 free messages are over. Upgrade to Eva Premium for unlimited chats."
+        notice = "Your 10 free messages are over. Premium includes a daily fair-use allowance."
         premiumOpen = true
     }
 
     internal fun shouldOpenPaywallBeforeSend(): Boolean {
         val premium = subscriptionState?.active == true
         if (!freeTrialExhausted(premium, freeMessagesRemaining)) return false
-        notice = "Your 10 free messages are over. Upgrade to Eva Premium for unlimited chats."
+        notice = "Your 10 free messages are over. Premium includes a daily fair-use allowance."
         premiumOpen = true
         activeTab = EvaTab.Chat
         return true

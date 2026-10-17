@@ -395,6 +395,8 @@ class MeriGfApi @Inject constructor(
             conversationId = data.bestString("conversationId", default = conversationId.orEmpty()),
             transcript = data.bestString("transcript", "text", default = "Voice note"),
             assistantText = reply,
+            speechLimitReached = data.optBoolean("speechLimitReached", false),
+            freeVoiceRemaining = data.optJSONObject("usage")?.takeIf { !it.isNull("freeVoiceRemaining") }?.optInt("freeVoiceRemaining"),
             audioBase64 = audio?.bestString("base64", "audioBase64", default = "")
                 ?: data.bestString("audioBase64", default = ""),
             audioMimeType = audio?.bestString("mimeType", default = "audio/wav")
@@ -498,7 +500,11 @@ class MeriGfApi @Inject constructor(
             amount = amount,
             formattedAmount = formattedAmount,
             currency = currency,
-            interval = planJson.bestString("interval", default = "monthly")
+            interval = planJson.bestString("interval", default = "monthly"),
+            dailyMessages = planJson.optJSONObject("fairUse")?.optInt("dailyMessages"),
+            dailySpeechCharacters = planJson.optJSONObject("fairUse")?.optInt("dailySpeechCharacters"),
+            dailyVoiceInputSeconds = planJson.optJSONObject("fairUse")?.optInt("dailyVoiceInputSeconds"),
+            voiceNoteMaxSeconds = planJson.optJSONObject("fairUse")?.optInt("voiceNoteMaxSeconds")
         )
         val usage = usageOverride ?: json.optJSONObject("usage")
         return SubscriptionState(
@@ -506,6 +512,7 @@ class MeriGfApi @Inject constructor(
             provider = json.optString("provider", "none"),
             autoRenew = json.optBoolean("autoRenew", false),
             cancelAtPeriodEnd = json.optBoolean("cancelAtPeriodEnd", false),
+            freeVoiceRemaining = usage?.takeIf { !it.isNull("freeVoiceRemaining") }?.optInt("freeVoiceRemaining"),
             status = json.optString("status", "none"),
             providerSubscriptionId = json.bestString("providerSubscriptionId", "subscriptionId", default = ""),
             checkoutUrl = json.bestString("checkoutUrl", default = ""),

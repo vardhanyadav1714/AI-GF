@@ -83,6 +83,7 @@ fun PremiumScreen(
                     }
                 }
                 Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
+                    if (!active) Text("Free trial: 10 messages including one voice note per account.", color = evaMuted(), fontSize = 13.sp)
                     if (!active && subscription?.freeRemaining == 0) Text("You've used your ${subscription.freeLimit} free messages", color = evaMuted(), fontSize = 14.sp)
                     Text(subscription?.plan?.formattedAmount ?: "INR 499", fontSize = 36.sp, fontWeight = FontWeight.Bold)
                     Text("per month", fontSize = 14.sp, color = evaMuted())
@@ -94,7 +95,13 @@ fun PremiumScreen(
                 Column(verticalArrangement = Arrangement.spacedBy(18.dp)) {
                     Benefit(Icons.Rounded.ChatBubbleOutline, "Every companion", "One membership across your Eva account")
                     Benefit(Icons.Rounded.Psychology, "Shared memory", "Continue your story across companions")
-                    Benefit(Icons.Rounded.GraphicEq, "Voice conversations", "60-second notes; 30 minutes per day")
+                    Benefit(Icons.Rounded.ChatBubbleOutline, "Daily chats", subscription?.plan?.dailyMessages?.let { "$it messages per day across all companions" } ?: "Daily fair-use allowance applies")
+                    Benefit(Icons.Rounded.GraphicEq, "Voice conversations", subscription?.plan?.let { plan ->
+                        if (plan.dailyVoiceInputSeconds != null && plan.voiceNoteMaxSeconds != null)
+                            "${plan.voiceNoteMaxSeconds}-second notes; ${plan.dailyVoiceInputSeconds / 60} input minutes per day"
+                        else "Separate daily recording and spoken-reply allowances"
+                    } ?: "Separate daily recording and spoken-reply allowances")
+                    subscription?.plan?.dailySpeechCharacters?.let { Text("Spoken replies: $it characters per day. After that, replies continue as text. Daily allowances reset at midnight UTC (5:30 AM IST).", color = evaMuted(), fontSize = 12.sp, lineHeight = 18.sp) }
                 }
                 HorizontalDivider(color = evaMuted().copy(alpha = 0.18f))
                 if (active) {

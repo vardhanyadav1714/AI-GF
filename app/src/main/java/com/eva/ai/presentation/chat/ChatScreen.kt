@@ -96,6 +96,8 @@ fun ChatScreen(controller: EvaAppController, scope: CoroutineScope) {
     val context = LocalContext.current
     val density = LocalDensity.current
     val companion = controller.selectedCompanion
+    var showCompanionProfile by remember(companion.id) { mutableStateOf(false) }
+    if (showCompanionProfile) CompanionProfileDialog(companion, { showCompanionProfile = false }, { showCompanionProfile = false })
     val listState = rememberLazyListState()
     val imeBottom = WindowInsets.ime.getBottom(density)
     val recorder = remember(context) { EvaAudioRecorder(context) }
@@ -134,7 +136,7 @@ fun ChatScreen(controller: EvaAppController, scope: CoroutineScope) {
     val permissionLauncher = rememberLauncherForActivityResult(
         ActivityResultContracts.RequestPermission()
     ) { granted ->
-        if (granted) {
+        if (granted && controller.voiceTrialAllowsRecording()) {
             runCatching {
                 VoicePlayback.stop()
                 recorder.start()
@@ -146,7 +148,7 @@ fun ChatScreen(controller: EvaAppController, scope: CoroutineScope) {
             }.onFailure { error ->
                 controller.notice = error.cleanMessage("Could not start recording.")
             }
-        } else {
+        } else if (!granted) {
             controller.notice = "Microphone permission is needed for voice messages."
         }
     }
@@ -154,6 +156,7 @@ fun ChatScreen(controller: EvaAppController, scope: CoroutineScope) {
         when {
             controller.sending -> controller.notice = "Wait for ${companion.name} to finish replying first."
             controller.shouldOpenPaywallBeforeSend() -> Unit
+            !controller.voiceTrialAllowsRecording() -> Unit
             ContextCompat.checkSelfPermission(
                 context,
                 Manifest.permission.RECORD_AUDIO
@@ -256,6 +259,7 @@ fun ChatScreen(controller: EvaAppController, scope: CoroutineScope) {
         Column(Modifier.fillMaxSize()) {
             ChatHeader(
                 companion = companion,
+                onProfile = { showCompanionProfile = true },
                 live = controller.backendLive,
                 onBack = { controller.activeTab = EvaTab.Home },
                 onReport = {
@@ -360,7 +364,8 @@ fun ChatHeader(
     companion: CompanionProfile,
     live: Boolean,
     onBack: () -> Unit,
-    onReport: () -> Unit
+    onReport: () -> Unit,
+    onProfile: () -> Unit = {}
 ) {
     var menuOpen by remember { mutableStateOf(false) }
 
@@ -378,9 +383,11 @@ fun ChatHeader(
             size = 42.dp
         )
         Spacer(Modifier.width(8.dp))
-        GradientAvatar(imageRes = companion.imageRes, size = 44.dp)
+        Box(Modifier.clickable(onClickLabel = "View ${companion.name}'s profile", onClick = onProfile)) {
+            GradientAvatar(imageRes = companion.imageRes, size = 44.dp)
+        }
         Spacer(Modifier.width(9.dp))
-        Column(Modifier.weight(1f)) {
+        Column(Modifier.weight(1f).clickable(onClickLabel = "View companion profile", onClick = onProfile)) {
             Text(companion.name, fontSize = 21.sp, fontWeight = FontWeight.ExtraBold)
             Row(verticalAlignment = Alignment.CenterVertically) {
                 Text(

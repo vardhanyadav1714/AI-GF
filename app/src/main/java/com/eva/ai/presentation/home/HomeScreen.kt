@@ -98,6 +98,11 @@ fun HomeScreen(
     onEditCompanion: () -> Unit = {}
 ) {
     val hapticTick = rememberEvaHaptic()
+    var showCompanionProfile by remember(companion.id) { mutableStateOf(false) }
+    if (showCompanionProfile) CompanionProfileDialog(companion, { showCompanionProfile = false }, {
+        showCompanionProfile = false
+        onChat()
+    })
 
     EvaPage {
         LazyColumn(
@@ -174,7 +179,12 @@ fun HomeScreen(
                 )
             }
             item {
-                Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+                FlowRow(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+                    TextButton(onClick = { showCompanionProfile = true }) {
+                        Icon(Icons.Rounded.PersonOutline, null)
+                        Spacer(Modifier.width(6.dp))
+                        Text("View profile")
+                    }
                     OutlinedButton(onClick = onCreateCompanion, colors = ButtonDefaults.outlinedButtonColors(contentColor = EvaColors.Pink)) {
                         Icon(Icons.Rounded.Add, contentDescription = null)
                         Spacer(Modifier.width(6.dp))

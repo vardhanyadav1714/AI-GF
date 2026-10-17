@@ -68,7 +68,9 @@ data class VoiceSendResult(
     val audioMimeType: String,
     val freeUsed: Int = 0,
     val freeLimit: Int = 10,
-    val freeRemaining: Int? = null
+    val freeRemaining: Int? = null,
+    val speechLimitReached: Boolean = false,
+    val freeVoiceRemaining: Int? = null
 )
 
 data class SubscriptionPlan(
@@ -77,7 +79,11 @@ data class SubscriptionPlan(
     val amount: Int,
     val formattedAmount: String,
     val currency: String,
-    val interval: String
+    val interval: String,
+    val dailyMessages: Int? = null,
+    val dailySpeechCharacters: Int? = null,
+    val dailyVoiceInputSeconds: Int? = null,
+    val voiceNoteMaxSeconds: Int? = null
 )
 
 data class SubscriptionState(
@@ -92,7 +98,8 @@ data class SubscriptionState(
     val freeRemaining: Int? = null,
     val provider: String = "none",
     val autoRenew: Boolean = false,
-    val cancelAtPeriodEnd: Boolean = false
+    val cancelAtPeriodEnd: Boolean = false,
+    val freeVoiceRemaining: Int? = null
 )
 
 data class SubscriptionCheckout(

@@ -56,6 +56,9 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.core.content.ContextCompat
 import androidx.core.view.WindowInsetsControllerCompat
+import androidx.lifecycle.Lifecycle
+import androidx.lifecycle.compose.LocalLifecycleOwner
+import androidx.lifecycle.repeatOnLifecycle
 import com.eva.ai.R
 import com.eva.ai.data.audio.*
 import com.eva.ai.data.remote.*
@@ -74,6 +77,7 @@ import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.isActive
 import kotlinx.coroutines.withContext
 import org.json.JSONArray
 import org.json.JSONObject
@@ -181,6 +185,16 @@ fun EvaShell(
     var trialAcknowledged by remember(user.id) { mutableStateOf(controller.settingsStore.trialNoticeSeen(user.id)) }
     var profileEditorOpen by rememberSaveable(user.id) { mutableStateOf(false) }
     val freeRemaining = controller.freeMessagesRemaining
+    val lifecycle = LocalLifecycleOwner.current.lifecycle
+    val membershipVisible = controller.premiumOpen || controller.activeTab == EvaTab.Profile
+    LaunchedEffect(user.id, lifecycle, membershipVisible) {
+        if (membershipVisible) lifecycle.repeatOnLifecycle(Lifecycle.State.STARTED) {
+            while (isActive) {
+                if (!controller.subscriptionBusy) controller.refreshSubscription(silent = true)
+                delay(30_000)
+            }
+        }
+    }
     Box(Modifier.fillMaxSize()) {
         if (!controller.needsDateOfBirth && !controller.premiumOpen && shouldShowTrialNotice(
                 trialAcknowledged, controller.subscriptionState?.active == true, freeRemaining)) {
@@ -191,7 +205,7 @@ fun EvaShell(
             AlertDialog(
                 onDismissRequest = { acknowledgeTrial() },
                 title = { Text(if (freeRemaining == 10) "Your first 10 messages are free" else "$freeRemaining free messages remaining") },
-                text = { Text("Your free messages are shared across all companions, including voice notes. After they're used, choose Eva Premium to continue. No payment starts unless you subscribe.") },
+                text = { Text("Your 10 free messages include one voice note, shared across all companions. Premium includes 200 messages and 30 minutes of voice input per day. Spoken replies have a separate allowance. No payment starts unless you subscribe.") },
                 confirmButton = { TextButton(onClick = { acknowledgeTrial() }) { Text("Start chatting") } }
             )
         }

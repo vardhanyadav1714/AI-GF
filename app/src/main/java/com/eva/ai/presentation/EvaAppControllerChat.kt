@@ -178,6 +178,15 @@ suspend fun EvaAppController.reportLastAssistantReply() {
     }
 }
 
+fun EvaAppController.voiceTrialAllowsRecording(): Boolean {
+    if (subscriptionState?.active != true && subscriptionState?.freeVoiceRemaining == 0) {
+        notice = "Your free voice note is used. Premium includes 30 minutes of voice input per day."
+        premiumOpen = true
+        return false
+    }
+    return true
+}
+
 suspend fun EvaAppController.sendVoiceNote(
     audioBytes: ByteArray,
     mimeType: String = "audio/mp4",
@@ -189,6 +198,7 @@ suspend fun EvaAppController.sendVoiceNote(
         return null
     }
     if (shouldOpenPaywallBeforeSend()) return null
+    if (!voiceTrialAllowsRecording()) return null
     if (sending) {
         notice = "Wait for ${selectedCompanion.name} to finish replying first."
         return null
@@ -269,6 +279,8 @@ suspend fun EvaAppController.sendVoiceNote(
             }
         }
         playback = result
+        if (result.freeVoiceRemaining != null) subscriptionState = subscriptionState?.copy(freeVoiceRemaining = result.freeVoiceRemaining)
+        if (result.speechLimitReached) notice = "Today's spoken-reply allowance is used up. Replies continue as text until midnight UTC (5:30 AM IST)."
     }.onFailure { error ->
         val userIndex = messages.indexOfFirst { it.id == voiceUserId }
         val placeholderIndex = messages.indexOfFirst { it.id == voicePlaceholderId }

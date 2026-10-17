@@ -41,16 +41,21 @@ suspend fun EvaAppController.userChoiceBillingEnabled(): Boolean =
 
 suspend fun EvaAppController.refreshSubscription(silent: Boolean = false): Boolean {
     val owner = billingUserId() ?: return false
-    if (!silent && subscriptionBusy) return false
+    if (subscriptionBusy) return false
+    val initial = subscriptionState
+    var applied = false
     val ticket = if (!silent) beginBillingOperation(BillingOperation.Refresh) else null
     try {
-        return billingResult { api.subscriptionStatus(sync = !silent) }.onSuccess { state ->
+        billingResult { api.subscriptionStatus(sync = !silent) }.onSuccess { state ->
             if (billingUserId() != owner) return@onSuccess
+            if (silent && (subscriptionBusy || subscriptionState != initial)) return@onSuccess
             subscriptionState = state
             freeMessagesRemaining = if (state.active) null else state.freeRemaining
+            applied = true
         }.onFailure { error ->
             if (!silent) notice = error.cleanMessage("Could not refresh subscription.")
-        }.isSuccess && billingUserId() == owner
+        }
+        return applied
     } finally { ticket?.let(::endBillingOperation) }
 }
 
