@@ -180,7 +180,7 @@ suspend fun EvaAppController.reportLastAssistantReply() {
 
 fun EvaAppController.voiceTrialAllowsRecording(): Boolean {
     if (subscriptionState?.active != true && subscriptionState?.freeVoiceRemaining == 0) {
-        notice = "Your free voice note is used. Premium includes 30 minutes of voice input per day."
+        notice = "Your free voice note is used. Premium includes 30 minutes of voice input per billing cycle."
         premiumOpen = true
         return false
     }

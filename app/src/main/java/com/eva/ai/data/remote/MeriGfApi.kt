@@ -503,7 +503,7 @@ class MeriGfApi @Inject constructor(
             interval = planJson.bestString("interval", default = "monthly"),
             dailyMessages = planJson.optJSONObject("fairUse")?.optInt("dailyMessages"),
             dailySpeechCharacters = planJson.optJSONObject("fairUse")?.optInt("dailySpeechCharacters"),
-            dailyVoiceInputSeconds = planJson.optJSONObject("fairUse")?.optInt("dailyVoiceInputSeconds"),
+            billingPeriodVoiceInputSeconds = planJson.optJSONObject("fairUse")?.takeIf { !it.isNull("billingPeriodVoiceInputSeconds") }?.optInt("billingPeriodVoiceInputSeconds"),
             voiceNoteMaxSeconds = planJson.optJSONObject("fairUse")?.optInt("voiceNoteMaxSeconds")
         )
         val usage = usageOverride ?: json.optJSONObject("usage")

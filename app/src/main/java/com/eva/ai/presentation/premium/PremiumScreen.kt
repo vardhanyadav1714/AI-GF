@@ -97,10 +97,10 @@ fun PremiumScreen(
                     Benefit(Icons.Rounded.Psychology, "Shared memory", "Continue your story across companions")
                     Benefit(Icons.Rounded.ChatBubbleOutline, "Daily chats", subscription?.plan?.dailyMessages?.let { "$it messages per day across all companions" } ?: "Daily fair-use allowance applies")
                     Benefit(Icons.Rounded.GraphicEq, "Voice conversations", subscription?.plan?.let { plan ->
-                        if (plan.dailyVoiceInputSeconds != null && plan.voiceNoteMaxSeconds != null)
-                            "${plan.voiceNoteMaxSeconds}-second notes; ${plan.dailyVoiceInputSeconds / 60} input minutes per day"
-                        else "Separate daily recording and spoken-reply allowances"
-                    } ?: "Separate daily recording and spoken-reply allowances")
+                        if (plan.billingPeriodVoiceInputSeconds != null && plan.voiceNoteMaxSeconds != null)
+                            "${plan.voiceNoteMaxSeconds}-second notes; ${plan.billingPeriodVoiceInputSeconds / 60} input minutes per billing cycle"
+                        else "Voice input renews with your paid billing cycle"
+                    } ?: "Voice input renews with your paid billing cycle")
                     subscription?.plan?.dailySpeechCharacters?.let { Text("Spoken replies: $it characters per day. After that, replies continue as text. Daily allowances reset at midnight UTC (5:30 AM IST).", color = evaMuted(), fontSize = 12.sp, lineHeight = 18.sp) }
                 }
                 HorizontalDivider(color = evaMuted().copy(alpha = 0.18f))

@@ -71,13 +71,13 @@ fun CompanionProfileDialog(companion: CompanionProfile, onDismiss: () -> Unit, o
                     }
                     item {
                         Text(companion.name, color = evaText(), fontSize = 28.sp, fontWeight = FontWeight.Bold)
-                        Text("Fictional AI companion | AI-generated portraits", color = evaMuted(), fontSize = 12.sp)
+                        Text("AI companion | AI-generated portraits", color = evaMuted(), fontSize = 12.sp)
                         val detail = if (story != null) "${story.optInt("age")} | ${story.optString("city")}" else "${companion.age} | Your private character"
                         Text(detail, color = evaMuted(), fontSize = 14.sp, modifier = Modifier.padding(top = 8.dp))
                     }
                     item {
                         Text(story?.optString("title") ?: "Their story", color = evaText(), fontSize = 20.sp, fontWeight = FontWeight.SemiBold)
-                        Text(story?.optString("backstory") ?: companion.about.ifBlank { "This is your private fictional companion." },
+                        Text(story?.optString("backstory") ?: companion.about.ifBlank { "Your companion's story is still being written." },
                             color = evaText(), fontSize = 15.sp, lineHeight = 24.sp, modifier = Modifier.padding(top = 10.dp))
                     }
                     item {

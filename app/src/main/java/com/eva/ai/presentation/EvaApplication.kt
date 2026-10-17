@@ -205,7 +205,7 @@ fun EvaShell(
             AlertDialog(
                 onDismissRequest = { acknowledgeTrial() },
                 title = { Text(if (freeRemaining == 10) "Your first 10 messages are free" else "$freeRemaining free messages remaining") },
-                text = { Text("Your 10 free messages include one voice note, shared across all companions. Premium includes 200 messages and 30 minutes of voice input per day. Spoken replies have a separate allowance. No payment starts unless you subscribe.") },
+                text = { Text("Your 10 free messages include one voice note, shared across all companions. Premium includes 200 messages per day and 30 minutes of voice input per billing cycle. Spoken replies have a separate daily allowance. No payment starts unless you subscribe.") },
                 confirmButton = { TextButton(onClick = { acknowledgeTrial() }) { Text("Start chatting") } }
             )
         }
