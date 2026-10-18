@@ -2,12 +2,13 @@ package com.eva.ai.data.remote
 
 import java.security.MessageDigest
 import java.security.SecureRandom
-import java.util.Base64
+import kotlin.io.encoding.Base64
 
 internal object OAuthPkce {
-    fun newVerifier(): String = Base64.getUrlEncoder().withoutPadding()
-        .encodeToString(ByteArray(32).also { SecureRandom().nextBytes(it) })
+    private val urlEncoder = Base64.UrlSafe.withPadding(Base64.PaddingOption.ABSENT)
 
-    fun challenge(verifier: String): String = Base64.getUrlEncoder().withoutPadding()
-        .encodeToString(MessageDigest.getInstance("SHA-256").digest(verifier.toByteArray(Charsets.US_ASCII)))
+    fun newVerifier(): String = urlEncoder.encode(ByteArray(32).also { SecureRandom().nextBytes(it) })
+
+    fun challenge(verifier: String): String = urlEncoder
+        .encode(MessageDigest.getInstance("SHA-256").digest(verifier.toByteArray(Charsets.US_ASCII)))
 }

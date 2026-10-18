@@ -97,6 +97,45 @@ fun ChatScreen(controller: EvaAppController, scope: CoroutineScope) {
     val density = LocalDensity.current
     val companion = controller.selectedCompanion
     var showCompanionProfile by remember(companion.id) { mutableStateOf(false) }
+    var reportMessage by remember(companion.id) { mutableStateOf<ChatMessage?>(null) }
+    var reportReason by remember { mutableStateOf("unsafe_content") }
+    var reportDetails by remember { mutableStateOf("") }
+    var reportSending by remember { mutableStateOf(false) }
+    reportMessage?.let { message ->
+        AlertDialog(
+            onDismissRequest = { if (!reportSending) reportMessage = null },
+            title = { Text("Report reply") },
+            text = {
+                Column(Modifier.verticalScroll(rememberScrollState())) {
+                    listOf("unsafe_content" to "Unsafe or harmful", "sexual_content" to "Sexual content",
+                        "minor_safety" to "Child safety", "self_harm" to "Self-harm",
+                        "hate_or_harassment" to "Hate or harassment", "wrong_language" to "Wrong language",
+                        "other" to "Other").forEach { (value, label) ->
+                        Row(Modifier.fillMaxWidth().clickable(enabled = !reportSending) { reportReason = value }, verticalAlignment = Alignment.CenterVertically) {
+                            RadioButton(selected = reportReason == value, onClick = { reportReason = value }, enabled = !reportSending,
+                                colors = RadioButtonDefaults.colors(selectedColor = EvaColors.Pink))
+                            Text(label, fontSize = 14.sp)
+                        }
+                    }
+                    OutlinedTextField(value = reportDetails, onValueChange = { reportDetails = it.take(1000) },
+                        label = { Text("Details (optional)") }, enabled = !reportSending, modifier = Modifier.fillMaxWidth())
+                }
+            },
+            confirmButton = {
+                TextButton(enabled = !reportSending, onClick = {
+                    if (!reportSending) {
+                        reportSending = true
+                        scope.launch {
+                            try {
+                                if (controller.reportAssistantMessage(message, reportReason, reportDetails)) reportMessage = null
+                            } finally { reportSending = false }
+                        }
+                    }
+                }) { Text(if (reportSending) "Sending..." else "Send report", color = EvaColors.Pink) }
+            },
+            dismissButton = { TextButton(enabled = !reportSending, onClick = { reportMessage = null }) { Text("Cancel") } }
+        )
+    }
     if (showCompanionProfile) CompanionProfileDialog(companion, { showCompanionProfile = false }, { showCompanionProfile = false })
     val listState = rememberLazyListState()
     val imeBottom = WindowInsets.ime.getBottom(density)
@@ -325,7 +364,12 @@ fun ChatScreen(controller: EvaAppController, scope: CoroutineScope) {
                                 MessageBubble(
                                     message = message,
                                     companion = companion,
-                                    api = controller.api
+                                    api = controller.api,
+                                    onReport = {
+                                        reportReason = "unsafe_content"
+                                        reportDetails = ""
+                                        reportMessage = message
+                                    }
                                 )
                             }
                         }
@@ -440,15 +484,17 @@ fun ChatHeader(
 fun MessageBubble(
     message: ChatMessage,
     companion: CompanionProfile,
-    api: MeriGfApi? = null
+    api: MeriGfApi? = null,
+    onReport: (() -> Unit)? = null
 ) {
     val fromUser = message.fromUser
+    val reportable = !fromUser && !message.streaming && message.id.matches(Regex("^[a-fA-F0-9]{24}$")) && onReport != null
 
     if (message.kind == MessageKind.Voice) {
         BoxWithConstraints(Modifier.fillMaxWidth()) {
             // Keep a visible opposite-side gutter, including on narrow phones.
             val bubbleWidth = minOf(240.dp, maxWidth * 0.68f)
-            Column(Modifier.fillMaxWidth(), horizontalAlignment = if (fromUser) Alignment.End else Alignment.Start) {
+            Box(Modifier.fillMaxWidth(), contentAlignment = if (fromUser) Alignment.CenterEnd else Alignment.CenterStart) {
                 val shape = RoundedCornerShape(8.dp)
                 Column(
                     Modifier.width(bubbleWidth).clip(shape)
@@ -458,6 +504,9 @@ fun MessageBubble(
                 ) {
                     VoiceMessagePlayer(message, api, senderLabel = if (fromUser) "You" else companion.name,
                         timestamp = formatTime(message.createdAtMillis))
+                }
+                if (reportable) {
+                    Box(Modifier.padding(start = bubbleWidth)) { ReplyReportButton(onReport!!) }
                 }
             }
         }
@@ -502,6 +551,7 @@ fun MessageBubble(
                 fontWeight = FontWeight.Medium,
                 modifier = Modifier.padding(start = 2.dp)
             )
+            if (reportable) ReplyReportButton(onReport!!)
         }
         return
     }
@@ -545,6 +595,13 @@ fun MessageBubble(
                 fontWeight = FontWeight.Medium
             )
         }
+    }
+}
+
+@Composable
+private fun ReplyReportButton(onClick: () -> Unit) {
+    IconButton(onClick = onClick, modifier = Modifier.size(48.dp)) {
+        Icon(Icons.Rounded.Flag, contentDescription = "Report this reply", tint = evaMuted(), modifier = Modifier.size(16.dp))
     }
 }
 

@@ -11,6 +11,7 @@ import com.eva.ai.domain.model.MessageKind
 import com.eva.ai.domain.model.VoiceSendResult
 import com.eva.ai.domain.model.companionById
 import kotlin.math.max
+import kotlinx.coroutines.CancellationException
 
 // ── Conversation loading ─────────────────────────────────────────────────────
 
@@ -164,17 +165,23 @@ suspend fun EvaAppController.reportLastAssistantReply() {
         return
     }
 
-    runCatching {
-        api.reportAiContent(
-            conversationId = selectedConversationId,
-            messageId = message.id.takeIf { it.isMongoObjectId() },
-            companionId = selectedCompanion.id,
-            details = message.text.take(400)
-        )
-    }.onSuccess {
+    reportAssistantMessage(message, "offensive_ai_content", "")
+}
+
+suspend fun EvaAppController.reportAssistantMessage(message: ChatMessage, reason: String, details: String): Boolean {
+    if (authState !is AuthState.SignedIn || message.fromUser || message.streaming || !message.id.isMongoObjectId()) {
+        notice = "This reply is not ready to report."
+        return false
+    }
+    return try {
+        api.reportAiContent(null, message.id, selectedCompanion.id, reason, details)
         notice = "Thanks. This reply has been reported for review."
-    }.onFailure { error ->
+        true
+    } catch (error: CancellationException) {
+        throw error
+    } catch (error: Exception) {
         notice = error.cleanMessage("Could not report that reply.")
+        false
     }
 }
 
