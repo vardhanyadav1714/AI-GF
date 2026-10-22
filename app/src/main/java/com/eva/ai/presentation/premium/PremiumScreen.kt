@@ -101,7 +101,11 @@ fun PremiumScreen(
                             "${plan.voiceNoteMaxSeconds}-second notes; ${plan.billingPeriodVoiceInputSeconds / 60} input minutes per billing cycle"
                         else "Voice input renews with your paid billing cycle"
                     } ?: "Voice input renews with your paid billing cycle")
-                    subscription?.plan?.dailySpeechCharacters?.let { Text("Spoken replies: $it characters per day. After that, replies continue as text. Daily allowances reset at midnight UTC (5:30 AM IST).", color = evaMuted(), fontSize = 12.sp, lineHeight = 18.sp) }
+                    subscription?.plan?.let { plan ->
+                        val speechAllowance = plan.billingPeriodSpeechCharacters?.let { "$it characters per paid billing cycle" }
+                            ?: plan.dailySpeechCharacters?.let { "$it characters per day" }
+                        speechAllowance?.let { Text("Spoken replies: $it. After that, replies continue as text. Voice messages count toward your daily message allowance. Daily allowances reset at midnight UTC (5:30 AM IST).", color = evaMuted(), fontSize = 12.sp, lineHeight = 18.sp) }
+                    }
                 }
                 HorizontalDivider(color = evaMuted().copy(alpha = 0.18f))
                 if (active) {

@@ -187,7 +187,7 @@ suspend fun EvaAppController.reportAssistantMessage(message: ChatMessage, reason
 
 fun EvaAppController.voiceTrialAllowsRecording(): Boolean {
     if (subscriptionState?.active != true && subscriptionState?.freeVoiceRemaining == 0) {
-        notice = "Your free voice note is used. Premium includes 30 minutes of voice input per billing cycle."
+        notice = "Your free voice note is used. Check Premium for the current voice allowance."
         premiumOpen = true
         return false
     }

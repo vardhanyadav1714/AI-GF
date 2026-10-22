@@ -82,6 +82,7 @@ data class SubscriptionPlan(
     val interval: String,
     val dailyMessages: Int? = null,
     val dailySpeechCharacters: Int? = null,
+    val billingPeriodSpeechCharacters: Int? = null,
     val billingPeriodVoiceInputSeconds: Int? = null,
     val voiceNoteMaxSeconds: Int? = null
 )
