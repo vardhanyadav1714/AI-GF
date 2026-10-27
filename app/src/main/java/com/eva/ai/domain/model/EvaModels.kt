@@ -70,7 +70,8 @@ data class VoiceSendResult(
     val freeLimit: Int = 10,
     val freeRemaining: Int? = null,
     val speechLimitReached: Boolean = false,
-    val freeVoiceRemaining: Int? = null
+    val freeVoiceRemaining: Int? = null,
+    val assistantMessageId: String = ""
 )
 
 data class SubscriptionPlan(

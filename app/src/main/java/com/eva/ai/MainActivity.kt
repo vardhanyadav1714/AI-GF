@@ -186,7 +186,9 @@ class MainActivity : ComponentActivity(), PaymentResultWithDataListener {
                 },
                 onRestorePurchases = {
                     if (!controller.subscriptionBusy) lifecycleScope.launch {
-                        controller.withBillingOperation(BillingOperation.Restore) {
+                        val owner = (controller.authState as? com.eva.ai.domain.model.AuthState.SignedIn)?.user?.id
+                            ?: return@launch
+                        val restored = controller.withBillingOperation(BillingOperation.Restore) {
                             try {
                                 val purchases = withTimeout(20_000) {
                                     suspendCancellableCoroutine<List<com.android.billingclient.api.Purchase>> { continuation ->
@@ -198,20 +200,34 @@ class MainActivity : ComponentActivity(), PaymentResultWithDataListener {
                                         }
                                     }
                                 }
+                                if ((controller.authState as? com.eva.ai.domain.model.AuthState.SignedIn)?.user?.id != owner) {
+                                    return@withBillingOperation false
+                                }
                                 purchaseVerificationMutex.withLock {
                                     purchases.forEach { purchase ->
                                         if (controller.verifyGooglePlayPurchase(purchase.purchaseToken, PlayBillingManager.PREMIUM_PRODUCT_ID)) {
                                             playBilling.acknowledge(purchase.purchaseToken)
+                                        } else {
+                                            throw IllegalStateException("An owned purchase could not be verified")
                                         }
                                     }
                                 }
-                                val refreshed = controller.refreshSubscription(silent = true)
+                                true
+                            } catch (error: Exception) {
+                                if (error is CancellationException && error !is kotlinx.coroutines.TimeoutCancellationException) throw error
+                                if ((controller.authState as? com.eva.ai.domain.model.AuthState.SignedIn)?.user?.id == owner) {
+                                    controller.notice = "Could not restore purchases. Please try again."
+                                }
+                                false
+                            }
+                        }
+                        // Refresh owns its own busy state; Restore must finish before starting it.
+                        if (restored && (controller.authState as? com.eva.ai.domain.model.AuthState.SignedIn)?.user?.id == owner) {
+                            val refreshed = controller.refreshSubscription()
+                            if ((controller.authState as? com.eva.ai.domain.model.AuthState.SignedIn)?.user?.id == owner) {
                                 if (refreshed) controller.notice = if (controller.subscriptionState?.active == true)
                                     "Your membership is restored." else "No active membership was found."
                                 else controller.notice = "Could not refresh your membership. Please try again."
-                            } catch (error: Exception) {
-                                if (error is CancellationException && error !is kotlinx.coroutines.TimeoutCancellationException) throw error
-                                controller.notice = "Could not restore purchases. Please try again."
                             }
                         }
                     }

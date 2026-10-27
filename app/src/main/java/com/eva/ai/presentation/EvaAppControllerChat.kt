@@ -3,6 +3,7 @@ package com.eva.ai.presentation
 import android.util.Base64
 import com.eva.ai.data.remote.ApiException
 import com.eva.ai.domain.logic.cleanMessage
+import com.eva.ai.domain.logic.VoiceRecordingPolicy
 import com.eva.ai.domain.model.AuthState
 import com.eva.ai.domain.model.ChatMessage
 import com.eva.ai.domain.model.CompanionProfile
@@ -135,6 +136,7 @@ suspend fun EvaAppController.sendMessage(quickText: String? = null) {
         selectedConversationId = result.conversationId
         applyUsage(result.freeRemaining)
         messages[placeholderIndex] = messages[placeholderIndex].copy(
+            id = result.assistantMessageId.ifBlank { messages[placeholderIndex].id },
             text = result.assistantText,
             streaming = false
         )
@@ -204,6 +206,11 @@ suspend fun EvaAppController.sendVoiceNote(
         notice = "I could not hear anything. Try again."
         return null
     }
+    val voiceMaxSeconds = VoiceRecordingPolicy.maxSeconds(subscriptionState?.plan?.voiceNoteMaxSeconds)
+    if (!VoiceRecordingPolicy.canSend(voiceSeconds, voiceMaxSeconds)) {
+        notice = "Voice notes can be up to $voiceMaxSeconds seconds. Please record a shorter note."
+        return null
+    }
     if (shouldOpenPaywallBeforeSend()) return null
     if (!voiceTrialAllowsRecording()) return null
     if (sending) {
@@ -271,6 +278,7 @@ suspend fun EvaAppController.sendVoiceNote(
             val assistantText = result.assistantText
             messages[placeholderIndex] = if (result.audioBase64.isNotBlank()) {
                 messages[placeholderIndex].copy(
+                    id = result.assistantMessageId.ifBlank { messages[placeholderIndex].id },
                     text = assistantText,
                     kind = MessageKind.Voice,
                     voiceSeconds = 0,
@@ -280,6 +288,7 @@ suspend fun EvaAppController.sendVoiceNote(
                 )
             } else {
                 messages[placeholderIndex].copy(
+                    id = result.assistantMessageId.ifBlank { messages[placeholderIndex].id },
                     text = assistantText,
                     streaming = false
                 )
