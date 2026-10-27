@@ -396,6 +396,7 @@ class MeriGfApi @Inject constructor(
             transcript = data.bestString("transcript", "text", default = "Voice note"),
             assistantText = reply,
             speechLimitReached = data.optBoolean("speechLimitReached", false),
+            assistantMessageId = data.optJSONObject("assistantMessage")?.optString("id").orEmpty(),
             freeVoiceRemaining = data.optJSONObject("usage")?.takeIf { !it.isNull("freeVoiceRemaining") }?.optInt("freeVoiceRemaining"),
             audioBase64 = audio?.bestString("base64", "audioBase64", default = "")
                 ?: data.bestString("audioBase64", default = ""),

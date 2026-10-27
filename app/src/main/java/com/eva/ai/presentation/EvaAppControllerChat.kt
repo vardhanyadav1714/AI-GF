@@ -136,6 +136,7 @@ suspend fun EvaAppController.sendMessage(quickText: String? = null) {
         selectedConversationId = result.conversationId
         applyUsage(result.freeRemaining)
         messages[placeholderIndex] = messages[placeholderIndex].copy(
+            id = result.assistantMessageId.ifBlank { messages[placeholderIndex].id },
             text = result.assistantText,
             streaming = false
         )
@@ -277,6 +278,7 @@ suspend fun EvaAppController.sendVoiceNote(
             val assistantText = result.assistantText
             messages[placeholderIndex] = if (result.audioBase64.isNotBlank()) {
                 messages[placeholderIndex].copy(
+                    id = result.assistantMessageId.ifBlank { messages[placeholderIndex].id },
                     text = assistantText,
                     kind = MessageKind.Voice,
                     voiceSeconds = 0,
@@ -286,6 +288,7 @@ suspend fun EvaAppController.sendVoiceNote(
                 )
             } else {
                 messages[placeholderIndex].copy(
+                    id = result.assistantMessageId.ifBlank { messages[placeholderIndex].id },
                     text = assistantText,
                     streaming = false
                 )
