@@ -314,8 +314,15 @@ fun ChatScreen(controller: EvaAppController, scope: CoroutineScope) {
                 live = controller.backendLive,
                 onBack = { controller.activeTab = EvaTab.Home },
                 onReport = {
-                    scope.launch {
-                        controller.reportLastAssistantReply()
+                    val message = chatMessages.lastOrNull {
+                        !it.fromUser && !it.streaming && it.id.matches(Regex("^[a-fA-F0-9]{24}$"))
+                    }
+                    if (message == null) {
+                        controller.notice = "There is no reply to report yet."
+                    } else {
+                        reportReason = "unsafe_content"
+                        reportDetails = ""
+                        reportMessage = message
                     }
                 }
             )
@@ -376,12 +383,7 @@ fun ChatScreen(controller: EvaAppController, scope: CoroutineScope) {
                                 MessageBubble(
                                     message = message,
                                     companion = companion,
-                                    api = controller.api,
-                                    onReport = {
-                                        reportReason = "unsafe_content"
-                                        reportDetails = ""
-                                        reportMessage = message
-                                    }
+                                    api = controller.api
                                 )
                             }
                         }
@@ -497,11 +499,9 @@ fun ChatHeader(
 fun MessageBubble(
     message: ChatMessage,
     companion: CompanionProfile,
-    api: MeriGfApi? = null,
-    onReport: (() -> Unit)? = null
+    api: MeriGfApi? = null
 ) {
     val fromUser = message.fromUser
-    val reportable = !fromUser && !message.streaming && message.id.matches(Regex("^[a-fA-F0-9]{24}$")) && onReport != null
 
     if (message.kind == MessageKind.Voice) {
         BoxWithConstraints(Modifier.fillMaxWidth()) {
@@ -517,9 +517,6 @@ fun MessageBubble(
                 ) {
                     VoiceMessagePlayer(message, api, senderLabel = if (fromUser) "You" else companion.name,
                         timestamp = formatTime(message.createdAtMillis))
-                }
-                if (reportable) {
-                    Box(Modifier.padding(start = bubbleWidth)) { ReplyReportButton(onReport!!) }
                 }
             }
         }
@@ -564,7 +561,6 @@ fun MessageBubble(
                 fontWeight = FontWeight.Medium,
                 modifier = Modifier.padding(start = 2.dp)
             )
-            if (reportable) ReplyReportButton(onReport!!)
         }
         return
     }
@@ -611,12 +607,6 @@ fun MessageBubble(
     }
 }
 
-@Composable
-private fun ReplyReportButton(onClick: () -> Unit) {
-    IconButton(onClick = onClick, modifier = Modifier.size(48.dp)) {
-        Icon(Icons.Rounded.Flag, contentDescription = "Report this reply", tint = evaMuted(), modifier = Modifier.size(16.dp))
-    }
-}
 
 @Composable
 private fun StoredChatImage(message: ChatMessage, api: MeriGfApi) {
