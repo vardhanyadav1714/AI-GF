@@ -140,6 +140,8 @@ fun ChatScreen(controller: EvaAppController, scope: CoroutineScope) {
     val listState = rememberLazyListState()
     val imeBottom = WindowInsets.ime.getBottom(density)
     val recorder = remember(context) { EvaAudioRecorder(context) }
+    val voiceMaxSeconds = VoiceRecordingPolicy.maxSeconds(controller.subscriptionState?.plan?.voiceNoteMaxSeconds)
+    var recordingMaxSeconds by remember { mutableIntStateOf(voiceMaxSeconds) }
     var recording by remember { mutableStateOf(false) }
     var recordingStartedAt by remember { mutableStateOf(0L) }
     var recordingSeconds by remember { mutableIntStateOf(0) }
@@ -178,7 +180,8 @@ fun ChatScreen(controller: EvaAppController, scope: CoroutineScope) {
         if (granted && controller.voiceTrialAllowsRecording()) {
             runCatching {
                 VoicePlayback.stop()
-                recorder.start()
+                recordingMaxSeconds = voiceMaxSeconds
+                recorder.start(recordingMaxSeconds)
                 voicePreview = null
                 recordingStartedAt = android.os.SystemClock.elapsedRealtime()
                 recordingSeconds = 0
@@ -202,7 +205,8 @@ fun ChatScreen(controller: EvaAppController, scope: CoroutineScope) {
             ) == PackageManager.PERMISSION_GRANTED -> {
                 runCatching {
                     VoicePlayback.stop()
-                    recorder.start()
+                    recordingMaxSeconds = voiceMaxSeconds
+                    recorder.start(recordingMaxSeconds)
                     voicePreview = null
                     recordingStartedAt = android.os.SystemClock.elapsedRealtime()
                     recordingSeconds = 0
@@ -217,18 +221,18 @@ fun ChatScreen(controller: EvaAppController, scope: CoroutineScope) {
         }
     }
     val finishRecording: () -> Unit = {
-        val audioBytes = runCatching { recorder.stop() }
+        val audio = runCatching { recorder.stop() }
             .onFailure { error ->
                 controller.notice = error.cleanMessage("Could not save that recording.")
             }
             .getOrNull()
         recording = false
-        if (audioBytes != null) {
+        if (audio != null) {
             hapticTick()
             voicePreview = VoiceRecordingPreview(
-                audioBytes = audioBytes,
+                audioBytes = audio.bytes,
                 mimeType = "audio/mp4",
-                durationSeconds = max(1, ((android.os.SystemClock.elapsedRealtime() - recordingStartedAt) / 1000L).toInt())
+                durationSeconds = audio.durationSeconds
             )
         }
     }
@@ -252,7 +256,13 @@ fun ChatScreen(controller: EvaAppController, scope: CoroutineScope) {
 
     LaunchedEffect(recording) {
         while (recording) {
-            recordingSeconds = ((android.os.SystemClock.elapsedRealtime() - recordingStartedAt) / 1000L).toInt()
+            val elapsed = android.os.SystemClock.elapsedRealtime() - recordingStartedAt
+            recordingSeconds = (elapsed / 1000L).toInt().coerceAtMost(recordingMaxSeconds)
+            if (VoiceRecordingPolicy.shouldStop(elapsed, recordingMaxSeconds)) {
+                finishRecording()
+                if (voicePreview != null) controller.notice = "Recording reached $recordingMaxSeconds seconds. Review it before sending."
+                break
+            }
             recordingLevel = recorder.level()
             delay(100)
         }
@@ -275,7 +285,9 @@ fun ChatScreen(controller: EvaAppController, scope: CoroutineScope) {
 
     val submitVoicePreview: () -> Unit = {
         val preview = voicePreview
-        if (preview != null) {
+        if (preview != null && !VoiceRecordingPolicy.canSend(preview.durationSeconds, voiceMaxSeconds)) {
+            controller.notice = "Voice notes can be up to $voiceMaxSeconds seconds. Please record a shorter note."
+        } else if (preview != null) {
             val previewCompanionId = companion.id
             VoicePlayback.stop()
             voicePreview = null
@@ -386,6 +398,7 @@ fun ChatScreen(controller: EvaAppController, scope: CoroutineScope) {
                 recordingSeconds = recordingSeconds,
                 recordingLevel = recordingLevel,
                 voicePreview = voicePreview,
+                voiceMaxSeconds = voiceMaxSeconds,
                 onDraftChange = { controller.draft = it },
                 onInputFocusChange = { composerFocused = it },
                 onSend = {
@@ -640,6 +653,7 @@ fun ChatComposer(
     recordingSeconds: Int,
     recordingLevel: Float,
     voicePreview: VoiceRecordingPreview?,
+    voiceMaxSeconds: Int,
     onDraftChange: (String) -> Unit,
     onInputFocusChange: (Boolean) -> Unit,
     onSend: () -> Unit,
@@ -699,6 +713,7 @@ fun ChatComposer(
                 voicePreview != null -> VoicePreviewComposer(
                     preview = voicePreview,
                     sending = sending,
+                    maxSeconds = voiceMaxSeconds,
                     onDelete = onVoiceDelete,
                     onSend = onVoiceSend
                 )
@@ -815,6 +830,7 @@ fun RecordingComposer(seconds: Int, level: Float, onCancel: () -> Unit, onStop: 
 fun VoicePreviewComposer(
     preview: VoiceRecordingPreview,
     sending: Boolean,
+    maxSeconds: Int,
     onDelete: () -> Unit,
     onSend: () -> Unit
 ) {
@@ -827,7 +843,7 @@ fun VoicePreviewComposer(
                 Icon(Icons.Rounded.DeleteOutline, contentDescription = "Discard recording", tint = evaMuted())
             }
             Spacer(Modifier.weight(1f))
-            FilledIconButton(onClick = onSend, enabled = !sending, modifier = Modifier.size(48.dp),
+            FilledIconButton(onClick = onSend, enabled = !sending && VoiceRecordingPolicy.canSend(preview.durationSeconds, maxSeconds), modifier = Modifier.size(48.dp),
                 colors = IconButtonDefaults.filledIconButtonColors(containerColor = EvaColors.Pink,
                     disabledContainerColor = EvaColors.Pink.copy(alpha = 0.14f))) {
                 if (sending) CircularProgressIndicator(Modifier.size(20.dp), color = EvaColors.Ink, strokeWidth = 2.dp)

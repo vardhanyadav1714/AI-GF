@@ -3,6 +3,7 @@ package com.eva.ai.presentation
 import android.util.Base64
 import com.eva.ai.data.remote.ApiException
 import com.eva.ai.domain.logic.cleanMessage
+import com.eva.ai.domain.logic.VoiceRecordingPolicy
 import com.eva.ai.domain.model.AuthState
 import com.eva.ai.domain.model.ChatMessage
 import com.eva.ai.domain.model.CompanionProfile
@@ -202,6 +203,11 @@ suspend fun EvaAppController.sendVoiceNote(
 ): VoiceSendResult? {
     if (audioBytes.isEmpty()) {
         notice = "I could not hear anything. Try again."
+        return null
+    }
+    val voiceMaxSeconds = VoiceRecordingPolicy.maxSeconds(subscriptionState?.plan?.voiceNoteMaxSeconds)
+    if (!VoiceRecordingPolicy.canSend(voiceSeconds, voiceMaxSeconds)) {
+        notice = "Voice notes can be up to $voiceMaxSeconds seconds. Please record a shorter note."
         return null
     }
     if (shouldOpenPaywallBeforeSend()) return null
